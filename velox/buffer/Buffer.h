@@ -17,6 +17,7 @@
 #pragma once
 
 #include <iomanip>
+#include <iostream>
 
 #include <boost/intrusive_ptr.hpp>
 #include "velox/common/base/BitUtil.h"
@@ -222,7 +223,19 @@ class Buffer {
         data_(data),
         capacity_(capacity),
         referenceCount_(0),
-        podType_(podType) {}
+        podType_(podType) {
+    if (pool_ != nullptr) {
+      auto& globalPool =
+          memory::getProcessDefaultMemoryManager().getRoot().getChildByName(
+              "gluten_velox_backend");
+      if (!globalPool.samePool(pool_) && !globalPool.hasChild(pool_)) {
+        std::cout << "Different pool: " << pool_->getName() << std::endl;
+        print_trace();
+      }
+    } else {
+      std::cout << "pool is nullptr" << std::endl;
+    }
+  }
 
   velox::memory::MemoryPool* const pool_;
   uint8_t* const data_;
@@ -488,7 +501,12 @@ class AlignedBuffer : public Buffer {
   }
 
   void freeToPool() override {
-    pool_->free(this, kPaddedSize + capacity_);
+    if (pool_ == nullptr) {
+      std::cout << "freeToPool: pool is nullptr" << std::endl;
+      print_trace();
+    } else {
+      pool_->free(this, kPaddedSize + capacity_);
+    }
   }
 };
 

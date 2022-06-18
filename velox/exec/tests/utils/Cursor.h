@@ -54,7 +54,7 @@ class TaskQueue {
   };
 
   explicit TaskQueue(uint64_t maxBytes)
-      : pool_(memory::getDefaultScopedMemoryPool()),
+      : pool_(memory::getProcessDefaultMemoryManager().getRoot().getChildByName("gluten_velox_backend").addScopedChild("gluten_velox_backend_task_queue")),
         maxBytes_(maxBytes),
         consumerFuture_(false) {}
 

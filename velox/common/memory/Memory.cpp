@@ -14,9 +14,25 @@
  * limitations under the License.
  */
 
+#include <execinfo.h>
+#include <stdio.h>
+
 #include "velox/common/memory/Memory.h"
 
 #include "velox/common/base/BitUtil.h"
+
+void print_trace(void) {
+  char** strings;
+  size_t i, size;
+  enum Constexpr { MAX_SIZE = 1024 };
+  void* array[MAX_SIZE];
+  size = backtrace(array, MAX_SIZE);
+  strings = backtrace_symbols(array, size);
+  for (i = 0; i < size; i++)
+    printf("%s\n", strings[i]);
+  puts("");
+  free(strings);
+}
 
 namespace facebook {
 namespace velox {
@@ -129,6 +145,13 @@ MemoryPool& MemoryPoolBase::addChild(const std::string& name, int64_t cap) {
 std::unique_ptr<ScopedMemoryPool> MemoryPoolBase::addScopedChild(
     const std::string& name,
     int64_t cap) {
+  auto& globalPool =
+      memory::getProcessDefaultMemoryManager().getRoot().getChildByName(
+          "gluten_velox_backend");
+  if (!globalPool.samePool(this) && !globalPool.hasChild(this)) {
+    std::cout << "addScopedChild " << name << std::endl;
+    print_trace();
+  }
   auto& pool = addChild(name, cap);
   return std::make_unique<ScopedMemoryPool>(pool.getWeakPtr());
 }
@@ -147,6 +170,22 @@ void MemoryPoolBase::dropChild(const MemoryPool* child) {
   if (iter != children_.end()) {
     children_.erase(iter);
   }
+}
+
+bool MemoryPoolBase::hasChild(const MemoryPool* pool) {
+  return std::any_of(
+      children_.begin(),
+      children_.end(),
+      [pool](const std::shared_ptr<MemoryPool>& child) {
+        return child->samePool(pool) || child->hasChild(pool);
+      });
+}
+
+bool MemoryPoolBase::samePool(const MemoryPool* pool) {
+  if (auto scopedPool = dynamic_cast<const ScopedMemoryPool*>(pool)) {
+    return this == &const_cast<ScopedMemoryPool*>(scopedPool)->getPool();
+  }
+  return this == pool;
 }
 
 void MemoryPoolBase::removeSelf() {

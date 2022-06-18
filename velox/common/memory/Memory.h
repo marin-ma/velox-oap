@@ -22,6 +22,7 @@
 #include <list>
 #include <memory>
 #include <string>
+#include <iostream>
 
 #include <fmt/format.h>
 #include <gflags/gflags.h>
@@ -38,9 +39,12 @@
 
 DECLARE_int32(memory_usage_aggregation_interval_millis);
 
+void print_trace(void);
+
 namespace facebook {
 namespace velox {
 namespace memory {
+
 constexpr uint16_t kNoAlignment = alignof(max_align_t);
 constexpr uint16_t kDefaultAlignment = 64;
 
@@ -127,6 +131,8 @@ class MemoryPool : public AbstractMemoryPool {
       const std::string& name,
       int64_t cap = kMaxMemory) = 0;
   virtual void dropChild(const MemoryPool* child) = 0;
+  virtual bool hasChild(const MemoryPool* pool) = 0;
+  virtual bool samePool(const MemoryPool* pool) = 0;
 
   // Used to explicitly remove self when a user is done with the node, since
   // nodes are owned by parents and users only get object references. Any
@@ -149,7 +155,10 @@ class ScopedMemoryPool final : public MemoryPool {
       : poolPtr_{poolPtr}, pool_{detail::getCheckedReference(poolPtr)} {}
 
   ~ScopedMemoryPool() {
+//  std::cout << "xgbtck  memory pool descructure " << std::hex << (uint64_t)this << std::endl;
     if (auto sptr = poolPtr_.lock()) {
+      std::cout << "Destroying memory pool " << sptr->getName() << std::endl;
+      print_trace();
       sptr->removeSelf();
     }
   }
@@ -249,6 +258,15 @@ class ScopedMemoryPool final : public MemoryPool {
   void dropChild(const velox::memory::MemoryPool* child) override {
     pool_.dropChild(child);
   }
+  bool hasChild(const MemoryPool* pool) override {
+    return pool_.hasChild(pool);
+  }
+  bool samePool(const MemoryPool* pool) override {
+    if (auto scopedPool = dynamic_cast<const ScopedMemoryPool*>(pool)) {
+      return &pool_ == &const_cast<ScopedMemoryPool*>(scopedPool)->getPool();
+    }
+    return &pool_ == pool;
+  }
   void setSubtreeMemoryUsage(int64_t size) override {
     pool_.setSubtreeMemoryUsage(size);
   }
@@ -301,6 +319,9 @@ class MemoryPoolBase : public std::enable_shared_from_this<MemoryPoolBase>,
   // Drops child (and implicitly the entire subtree) to reclaim memory.
   // Derived classes can override this behavior. e.g. append only semantics.
   void dropChild(const MemoryPool* child) override;
+
+  bool hasChild(const MemoryPool* pool) override;
+  bool samePool(const MemoryPool* pool) override;
   // Used to explicitly remove self when a user is done with the node, since
   // nodes are owned by parents and users only get object references. Any
   // reference to self would be invalid after this call. This will also drop the
@@ -910,6 +931,7 @@ class Allocator {
     return !(*this == rhs);
   }
 };
+
 } // namespace memory
 } // namespace velox
 } // namespace facebook
