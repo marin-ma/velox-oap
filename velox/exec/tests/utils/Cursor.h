@@ -54,7 +54,12 @@ class TaskQueue {
   };
 
   explicit TaskQueue(uint64_t maxBytes)
-      : pool_(memory::getProcessDefaultMemoryManager().getRoot().getChildByName("gluten_velox_backend").addScopedChild("gluten_velox_backend_task_queue")),
+      : pool_(memory::getDefaultScopedMemoryPool()),
+        maxBytes_(maxBytes),
+        consumerFuture_(false) {}
+
+  TaskQueue(velox::memory::MemoryPool* raw_pool, uint64_t maxBytes)
+      : raw_pool_(raw_pool),
         maxBytes_(maxBytes),
         consumerFuture_(false) {}
 
@@ -78,11 +83,15 @@ class TaskQueue {
   bool hasNext();
 
   velox::memory::MemoryPool* pool() const {
+    if (raw_pool_ != nullptr) {
+      return raw_pool_;
+    }
     return pool_.get();
   }
 
  private:
   // Owns the vectors in 'queue_', hence must be declared first.
+  velox::memory::MemoryPool* raw_pool_;
   std::unique_ptr<velox::memory::MemoryPool> pool_;
   std::deque<TaskQueueEntry> queue_;
   std::optional<int32_t> numProducers_;

@@ -22,6 +22,7 @@
 #include "velox/common/base/BitUtil.h"
 
 void print_trace(void) {
+/*
   char** strings;
   size_t i, size;
   enum Constexpr { MAX_SIZE = 1024 };
@@ -32,6 +33,7 @@ void print_trace(void) {
     printf("%s\n", strings[i]);
   puts("");
   free(strings);
+  */
 }
 
 namespace facebook {
@@ -173,6 +175,7 @@ void MemoryPoolBase::dropChild(const MemoryPool* child) {
 }
 
 bool MemoryPoolBase::hasChild(const MemoryPool* pool) {
+  folly::SharedMutex::ReadHolder guard{childrenMutex_};
   return std::any_of(
       children_.begin(),
       children_.end(),
