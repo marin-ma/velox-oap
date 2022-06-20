@@ -145,13 +145,15 @@ MemoryPool& MemoryPoolBase::addChild(const std::string& name, int64_t cap) {
 std::unique_ptr<ScopedMemoryPool> MemoryPoolBase::addScopedChild(
     const std::string& name,
     int64_t cap) {
+#ifdef VELOX_ENABLE_DEBUG
   auto& globalPool =
       memory::getProcessDefaultMemoryManager().getRoot().getChildByName(
           "gluten_velox_backend");
   if (!globalPool.samePool(this) && !globalPool.hasChild(this)) {
-    std::cout << "addScopedChild " << name << std::endl;
+    std::cout << "Different memory pool: addScopedChild " << name << std::endl;
     print_trace();
   }
+#endif
   auto& pool = addChild(name, cap);
   return std::make_unique<ScopedMemoryPool>(pool.getWeakPtr());
 }

@@ -155,10 +155,11 @@ class ScopedMemoryPool final : public MemoryPool {
       : poolPtr_{poolPtr}, pool_{detail::getCheckedReference(poolPtr)} {}
 
   ~ScopedMemoryPool() {
-//  std::cout << "xgbtck  memory pool descructure " << std::hex << (uint64_t)this << std::endl;
     if (auto sptr = poolPtr_.lock()) {
+#ifdef VELOX_ENABLE_DEBUG
       std::cout << "Destroying memory pool " << sptr->getName() << std::endl;
       print_trace();
+#endif
       sptr->removeSelf();
     }
   }
@@ -931,7 +932,6 @@ class Allocator {
     return !(*this == rhs);
   }
 };
-
 } // namespace memory
 } // namespace velox
 } // namespace facebook

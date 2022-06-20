@@ -29,6 +29,7 @@ option(
   "Build a minimal set of components only. This will override other build options."
   OFF)
 
+option(VELOX_ENABLE_DEBUG "Print debug messages." OFF)
 option(VELOX_ENABLE_DUCKDB "Build duckDB to enable differential testing." ON)
 option(VELOX_ENABLE_EXEC "Build exec." ON)
 option(VELOX_ENABLE_AGGREGATES "Build aggregates." ON)
@@ -97,6 +98,9 @@ if(${VELOX_BUILD_BENCHMARKS_LARGE})
   set(VELOX_BUILD_TEST_UTILS ON)
 endif()
 
+if(VELOX_ENABLE_DEBUG)
+  add_definitions(-DVELOX_ENABLE_DEBUG)
+endif()
 if(VELOX_ENABLE_S3)
   # Set AWS_ROOT_DIR if you have a custom install location of AWS SDK CPP.
   if(AWSSDK_ROOT_DIR)

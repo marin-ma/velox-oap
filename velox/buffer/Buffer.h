@@ -224,6 +224,7 @@ class Buffer {
         capacity_(capacity),
         referenceCount_(0),
         podType_(podType) {
+#ifdef VELOX_ENABLE_DEBUG
     if (pool_ != nullptr) {
       auto& globalPool =
           memory::getProcessDefaultMemoryManager().getRoot().getChildByName(
@@ -232,9 +233,8 @@ class Buffer {
         std::cout << "Different pool: " << pool_->getName() << std::endl;
         print_trace();
       }
-    } else {
-      std::cout << "pool is nullptr" << std::endl;
     }
+#endif
   }
 
   velox::memory::MemoryPool* const pool_;
@@ -502,8 +502,10 @@ class AlignedBuffer : public Buffer {
 
   void freeToPool() override {
     if (pool_ == nullptr) {
+#ifdef VELOX_ENABLE_DEBUG
       std::cout << "freeToPool: pool is nullptr" << std::endl;
       print_trace();
+#endif
     } else {
       pool_->free(this, kPaddedSize + capacity_);
     }
