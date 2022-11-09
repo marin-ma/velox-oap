@@ -614,7 +614,7 @@ void HashTable<ignoreNullKeys>::checkSize(int32_t numNew) {
     // numDistinct_ is non-0 when switching from HashMode::kArray to regular
     // hashing.
     auto newSize = std::max(
-        (uint64_t)2048, bits::nextPowerOfTwo(numNew * 2 + numDistinct_));
+        (uint64_t)2048, bits::nextPowerOfTwo(numNew * 2 + numDistinct_ + numDistinct_ / 8));
     allocateTables(newSize);
     if (numDistinct_) {
       rehash();
