@@ -23,6 +23,11 @@
 namespace facebook::velox::functions::sparksql {
 namespace {
 class BloomFilterMightContainFunction final : public exec::VectorFunction {
+ public:
+  explicit BloomFilterMightContainFunction(
+      BloomFilter<StlAllocator<uint64_t>> bloom)
+      : bloom_(bloom) {}
+
   bool isDefaultNullBehavior() const final {
     return false;
   }
@@ -44,18 +49,16 @@ class BloomFilterMightContainFunction final : public exec::VectorFunction {
       return;
     }
 
-    HashStringAllocator allocator{context.pool()};
     if (serialized->isConstantMapping()) {
-      BloomFilter output{StlAllocator<uint64_t>(&allocator)};
-      output.merge(serialized->valueAt<StringView>(0).str().c_str());
       rows.applyToSelected([&](int row) {
-        auto contain = output.mayContain(
+        auto contain = bloom_.mayContain(
             folly::hasher<int64_t>()(value->valueAt<int64_t>(row)));
         result.set(row, contain);
       });
       return;
     }
 
+    HashStringAllocator allocator{context.pool()};
     rows.applyToSelected([&](int row) {
       BloomFilter output{StlAllocator<uint64_t>(&allocator)};
       output.merge(serialized->valueAt<StringView>(0).str().c_str());
@@ -64,6 +67,9 @@ class BloomFilterMightContainFunction final : public exec::VectorFunction {
       result.set(row, contain);
     });
   }
+
+ private:
+  BloomFilter<StlAllocator<uint64_t>> bloom_;
 };
 } // namespace
 
@@ -78,8 +84,18 @@ std::vector<std::shared_ptr<exec::FunctionSignature>> mightContainSignatures() {
 std::shared_ptr<exec::VectorFunction> makeMightContain(
     const std::string& name,
     const std::vector<exec::VectorFunctionArg>& inputArgs) {
+  BaseVector* serialized = inputArgs[0].constantValue.get();
+  VELOX_USER_CHECK(
+      serialized != nullptr,
+      "{} requires first argument to be a constant of type VARBINARY",
+      name,
+      inputArgs[0].type->toString());
+  HashStringAllocator allocator{memory::getDefaultMemoryPool().get()};
+  BloomFilter bloom{StlAllocator<uint64_t>(&allocator)};
+  bloom.merge(
+      serialized->as<ConstantVector<StringView>>()->valueAt(0).str().c_str());
   static const auto kMightContainFunction =
-      std::make_shared<BloomFilterMightContainFunction>();
+      std::make_shared<BloomFilterMightContainFunction>(std::move(bloom));
   return kMightContainFunction;
 }
 
