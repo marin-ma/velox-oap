@@ -24,9 +24,14 @@ namespace facebook::velox::functions::sparksql {
 namespace {
 class BloomFilterMightContainFunction final : public exec::VectorFunction {
  public:
-  explicit BloomFilterMightContainFunction(
-      BloomFilter<StlAllocator<uint64_t>> bloom)
-      : bloom_(bloom) {}
+  explicit BloomFilterMightContainFunction(BaseVector* serialized) {
+    if (!serialized->isNullAt(0)) {
+      bloom_.merge(serialized->as<ConstantVector<StringView>>()
+                       ->valueAt(0)
+                       .str()
+                       .c_str());
+    }
+  }
 
   bool isDefaultNullBehavior() const final {
     return false;
@@ -69,7 +74,10 @@ class BloomFilterMightContainFunction final : public exec::VectorFunction {
   }
 
  private:
-  BloomFilter<StlAllocator<uint64_t>> bloom_;
+  std::shared_ptr<memory::MemoryPool> pool_{memory::getDefaultMemoryPool()};
+  HashStringAllocator allocator_{pool_.get()};
+  BloomFilter<StlAllocator<uint64_t>> bloom_{
+      StlAllocator<uint64_t>(&allocator_)};
 };
 } // namespace
 
@@ -90,12 +98,8 @@ std::shared_ptr<exec::VectorFunction> makeMightContain(
       "{} requires first argument to be a constant of type VARBINARY",
       name,
       inputArgs[0].type->toString());
-  HashStringAllocator allocator{memory::getDefaultMemoryPool().get()};
-  BloomFilter bloom{StlAllocator<uint64_t>(&allocator)};
-  bloom.merge(
-      serialized->as<ConstantVector<StringView>>()->valueAt(0).str().c_str());
   static const auto kMightContainFunction =
-      std::make_shared<BloomFilterMightContainFunction>(std::move(bloom));
+      std::make_shared<BloomFilterMightContainFunction>(serialized);
   return kMightContainFunction;
 }
 
