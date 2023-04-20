@@ -98,7 +98,7 @@ std::shared_ptr<exec::VectorFunction> makeMightContain(
       "{} requires first argument to be a constant of type VARBINARY",
       name,
       inputArgs[0].type->toString());
-  static const auto kMightContainFunction =
+  auto kMightContainFunction =
       std::make_shared<BloomFilterMightContainFunction>(serialized);
   return kMightContainFunction;
 }
