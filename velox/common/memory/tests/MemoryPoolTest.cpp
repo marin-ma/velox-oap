@@ -3072,7 +3072,12 @@ TEST_P(MemoryPoolTest, maybeReserveFailWithAbort) {
   constexpr int64_t kMB = 1 << 20;
   MemoryManagerOptions options;
   options.capacity = kMaxMemory;
-  options.arbitratorKind = MemoryArbitrator::Kind::kShared;
+  MemoryArbitrator::Config arbitratorConfig;
+  arbitratorConfig.kind = MemoryArbitrator::Kind::kShared;
+  arbitratorConfig.capacity = options.capacity;
+  options.arbitratorFactory = [&]() {
+    return MemoryArbitrator::create(arbitratorConfig);
+  };
   MemoryManager manager{options};
   auto root = manager.addRootPool(
       "maybeReserveFailWithAbort", kMaxSize, MemoryReclaimer::create());
