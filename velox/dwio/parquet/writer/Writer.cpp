@@ -23,6 +23,7 @@
 #include "velox/dwio/parquet/writer/Writer.h"
 #include "velox/dwio/parquet/writer/arrow/Properties.h"
 #include "velox/dwio/parquet/writer/arrow/Writer.h"
+#include "velox/dwio/parquet/writer/arrow/util/Compression.h"
 
 namespace facebook::velox::parquet {
 
@@ -135,6 +136,15 @@ std::shared_ptr<WriterProperties> getArrowParquetWriterOptions(
   properties = properties->data_pagesize(options.dataPageSize);
   properties = properties->max_row_group_length(
       static_cast<int64_t>(flushPolicy->rowsInRowGroup()));
+
+  if (options.compression == common::CompressionKind_GZIP) {
+    auto codecOptions = std::make_shared<
+        facebook::velox::parquet::arrow::util::GZipCodecOptions>();
+    codecOptions->window_bits = 12;
+    codecOptions->gzip_format =
+        facebook::velox::parquet::arrow::util::GZipFormat::GZIP;
+    properties = properties->codec_options(codecOptions);
+  }
   return properties->build();
 }
 
