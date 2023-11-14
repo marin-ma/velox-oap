@@ -15,5 +15,5 @@
 add_library(velox_dwio_common_compression Compression.cpp PagedInputStream.cpp
                                           PagedOutputStream.cpp)
 
-target_link_libraries(velox_dwio_common_compression velox_dwio_common xsimd
+target_link_libraries(velox_dwio_common_compression velox_dwio_common velox_common_compression_v2 xsimd
                       gtest Folly::folly)
