@@ -19,6 +19,7 @@ endif()
 add_library(
   velox_common_compression_v2
   Compression.cpp
+  GzipCompression.cpp
   HadoopCompressionFormat.cpp
   Lz4Compression.cpp)
 
