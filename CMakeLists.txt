@@ -148,6 +148,7 @@ option(VELOX_ENABLE_COMPRESSION_ZSTD "Enable Zstd compression support." OFF)
 option(VELOX_ENABLE_COMPRESSION_ZLIB "Enable Zlib/Gzip compression support."
        OFF)
 option(VELOX_ENABLE_COMPRESSION_SNAPPY "Enable Snappy compression support." OFF)
+option(VELOX_ENABLE_COMPRESSION_LZO "Enable Lzo compression support." OFF)
 
 option(VELOX_BUILD_TEST_UTILS "Builds Velox test utilities" OFF)
 option(VELOX_BUILD_VECTOR_TEST_UTILS "Builds Velox vector test utilities" OFF)
@@ -206,6 +207,7 @@ if(${VELOX_BUILD_TESTING}
   set(VELOX_ENABLE_COMPRESSION_ZSTD ON)
   set(VELOX_ENABLE_COMPRESSION_ZLIB ON)
   set(VELOX_ENABLE_COMPRESSION_SNAPPY ON)
+  set(VELOX_ENABLE_COMPRESSION_LZO ON)
 endif()
 
 if(${VELOX_ENABLE_EXAMPLES})
@@ -516,10 +518,7 @@ if(VELOX_ENABLE_COMPRESSION_SNAPPY)
   find_package(Snappy REQUIRED)
 endif()
 
-if(${VELOX_BUILD_MINIMAL_WITH_DWIO} OR ${VELOX_ENABLE_HIVE_CONNECTOR})
-  # DWIO needs all sorts of stream compression libraries.
-  #
-  # TODO: make these optional and pluggable.
+if(VELOX_ENABLE_COMPRESSION_LZO)
   find_package(lzo2 REQUIRED)
 endif()
 
