@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include "velox/common/compression/v2/Compression.h"
 #include "velox/dwio/common/OutputStream.h"
 #include "velox/dwio/common/compression/Compression.h"
 #include "velox/dwio/common/compression/CompressionBufferPool.h"
@@ -29,16 +30,16 @@ class PagedOutputStream : public BufferedOutputStream {
       DataBufferHolder& bufferHolder,
       uint32_t compressionThreshold,
       uint8_t pageHeaderSize,
-      std::unique_ptr<Compressor> compressor,
+      std::unique_ptr<facebook::velox::common::Codec> codec,
       const dwio::common::encryption::Encrypter* encryptor)
       : BufferedOutputStream(bufferHolder),
         pool_{&pool},
-        compressor_{std::move(compressor)},
+        codec_{std::move(codec)},
         encryptor_{encryptor},
         threshold_{compressionThreshold},
         pageHeaderSize_{pageHeaderSize} {
     VELOX_CHECK(
-        compressor_ || encryptor_,
+        codec_ || encryptor_,
         "Neither compressor or encryptor is set for paged output stream");
   }
 
@@ -75,7 +76,7 @@ class PagedOutputStream : public BufferedOutputStream {
 
   CompressionBufferPool* const pool_;
 
-  const std::unique_ptr<Compressor> compressor_;
+  const std::unique_ptr<facebook::velox::common::Codec> codec_;
 
   // Encryption provider
   const dwio::common::encryption::Encrypter* const encryptor_;

@@ -17,6 +17,7 @@
 #pragma once
 
 #include "velox/common/compression/Compression.h"
+#include "velox/common/compression/v2/Compression.h"
 #include "velox/dwio/common/SeekableInputStream.h"
 #include "velox/dwio/common/encryption/Encryption.h"
 
@@ -44,14 +45,13 @@ class Compressor {
 class Decompressor {
  public:
   explicit Decompressor(uint64_t blockSize, const std::string& streamDebugInfo)
-      : blockSize_{static_cast<int64_t>(blockSize)},
-        streamDebugInfo_{streamDebugInfo} {}
+      : streamDebugInfo_{streamDebugInfo} {}
 
   virtual ~Decompressor() = default;
 
   virtual std::pair<int64_t, bool /* Is the size exact? */>
   getDecompressedLength(const char* /* src */, uint64_t /* srcLength */) const {
-    return {blockSize_, false};
+    return {1024, false};
   }
 
   virtual uint64_t decompress(
@@ -61,7 +61,6 @@ class Decompressor {
       uint64_t destLength) = 0;
 
  protected:
-  int64_t blockSize_;
   const std::string streamDebugInfo_;
 };
 
@@ -104,7 +103,7 @@ std::unique_ptr<dwio::common::SeekableInputStream> createDecompressor(
     std::unique_ptr<dwio::common::SeekableInputStream> input,
     uint64_t bufferSize,
     memory::MemoryPool& pool,
-    const CompressionOptions& options,
+    const std::shared_ptr<facebook::velox::common::CodecOptions>& options,
     const std::string& streamDebugInfo,
     const dwio::common::encryption::Decrypter* decryptr = nullptr,
     bool useRawDecompression = false,

@@ -17,6 +17,8 @@
 #pragma once
 
 #include "velox/common/compression/Compression.h"
+#include "velox/common/compression/v2/Compression.h"
+#include "velox/common/compression/v2/GzipCompression.h"
 #include "velox/dwio/common/OutputStream.h"
 #include "velox/dwio/common/SeekableInputStream.h"
 #include "velox/dwio/common/compression/Compression.h"
@@ -33,22 +35,26 @@ using namespace dwio::common::compression;
 
 constexpr uint8_t PAGE_HEADER_SIZE = 3;
 
-inline CompressionOptions getDwrfOrcCompressionOptions(
+inline std::shared_ptr<facebook::velox::common::CodecOptions>
+getDwrfOrcCompressionOptions(
     velox::common::CompressionKind kind,
-    uint32_t compressionThreshold,
     int32_t zlibCompressionLevel,
     int32_t zstdCompressionLevel) {
-  CompressionOptions options;
-  options.compressionThreshold = compressionThreshold;
-
-  if (kind == velox::common::CompressionKind_ZLIB ||
-      kind == velox::common::CompressionKind_GZIP) {
-    options.format.zlib.windowBits = Compressor::DWRF_ORC_ZLIB_WINDOW_BITS;
-    options.format.zlib.compressionLevel = zlibCompressionLevel;
-  } else if (kind == velox::common::CompressionKind_ZSTD) {
-    options.format.zstd.compressionLevel = zstdCompressionLevel;
+  if (kind == common::CompressionKind_ZLIB ||
+      kind == common::CompressionKind_GZIP) {
+    auto options =
+        std::make_shared<facebook::velox::common::GzipCodecOptions>();
+    options->windowBits =
+        (-dwio::common::compression::Compressor::DWRF_ORC_ZLIB_WINDOW_BITS);
+    options->format = common::GzipFormat::kDeflate;
+    options->compressionLevel = zlibCompressionLevel;
+    return options;
   }
-  return options;
+  if (kind == common::CompressionKind_ZSTD) {
+    return std::make_shared<facebook::velox::common::CodecOptions>(
+        zstdCompressionLevel);
+  }
+  return std::make_shared<facebook::velox::common::CodecOptions>();
 }
 
 /**
@@ -65,13 +71,12 @@ inline std::unique_ptr<dwio::common::BufferedOutputStream> createCompressor(
     dwio::common::DataBufferHolder& bufferHolder,
     const Config& config,
     const dwio::common::encryption::Encrypter* encrypter = nullptr) {
-  CompressionOptions dwrfOrcCompressionOptions = getDwrfOrcCompressionOptions(
+  auto options = getDwrfOrcCompressionOptions(
       kind,
-      config.get(Config::COMPRESSION_THRESHOLD),
       config.get(Config::ZLIB_COMPRESSION_LEVEL),
       config.get(Config::ZSTD_COMPRESSION_LEVEL));
-  auto compressor = createCompressor(kind, dwrfOrcCompressionOptions);
-  if (!compressor) {
+  auto codec = facebook::velox::common::Codec::create(kind, *options);
+  if (!codec) {
     if (!encrypter && kind == common::CompressionKind::CompressionKind_NONE) {
       return std::make_unique<dwio::common::BufferedOutputStream>(bufferHolder);
     }
@@ -79,24 +84,24 @@ inline std::unique_ptr<dwio::common::BufferedOutputStream> createCompressor(
   return std::make_unique<PagedOutputStream>(
       bufferPool,
       bufferHolder,
-      dwrfOrcCompressionOptions.compressionThreshold,
+      config.get(Config::COMPRESSION_THRESHOLD),
       PAGE_HEADER_SIZE,
-      std::move(compressor),
+      std::move(codec),
       encrypter);
 }
 
-inline CompressionOptions getDwrfOrcDecompressionOptions(
-    common::CompressionKind kind) {
-  CompressionOptions options;
+inline std::shared_ptr<facebook::velox::common::CodecOptions>
+getDwrfOrcDecompressionOptions(common::CompressionKind kind) {
   if (kind == common::CompressionKind_ZLIB ||
       kind == common::CompressionKind_GZIP) {
-    options.format.zlib.windowBits = Compressor::DWRF_ORC_ZLIB_WINDOW_BITS;
-  } else if (
-      kind == common::CompressionKind_LZ4 ||
-      kind == common::CompressionKind_LZO) {
-    options.format.lz4_lzo.isHadoopFrameFormat = false;
+    auto options =
+        std::make_shared<facebook::velox::common::GzipCodecOptions>();
+    options->windowBits =
+        (-dwio::common::compression::Compressor::DWRF_ORC_ZLIB_WINDOW_BITS);
+    options->format = common::GzipFormat::kDeflate;
+    return options;
   }
-  return options;
+  return std::make_shared<facebook::velox::common::CodecOptions>();
 }
 
 /**
@@ -113,8 +118,8 @@ inline std::unique_ptr<dwio::common::SeekableInputStream> createDecompressor(
     memory::MemoryPool& pool,
     const std::string& streamDebugInfo,
     const dwio::common::encryption::Decrypter* decryptr = nullptr) {
-  const CompressionOptions& options = getDwrfOrcDecompressionOptions(kind);
-  return createDecompressor(
+  const auto& options = getDwrfOrcDecompressionOptions(kind);
+  return dwio::common::compression::createDecompressor(
       kind,
       std::move(input),
       bufferSize,

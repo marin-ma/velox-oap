@@ -26,12 +26,14 @@ std::vector<folly::StringPiece> PagedOutputStream::createPage() {
   auto compressedSize = origSize;
   // Applies compression if there is compressor and original data size exceeds
   // threshold.
-  if (compressor_ && origSize >= threshold_) {
+  if (codec_ && origSize >= threshold_) {
     compressionBuffer_ = pool_->getBuffer(buffer_.size());
-    compressedSize = compressor_->compress(
-        buffer_.data() + pageHeaderSize_,
-        compressionBuffer_->data() + pageHeaderSize_,
-        origSize);
+    compressedSize = codec_->compressPartial(
+        origSize,
+        reinterpret_cast<const uint8_t*>(buffer_.data() + pageHeaderSize_),
+        buffer_.size(),
+        reinterpret_cast<uint8_t*>(
+            compressionBuffer_->data() + pageHeaderSize_));
   }
 
   folly::StringPiece compressed;

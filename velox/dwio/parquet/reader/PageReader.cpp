@@ -130,7 +130,7 @@ common::CompressionKind PageReader::thriftCodecToCompressionKind() {
       return common::CompressionKind::CompressionKind_GZIP;
       break;
     case thrift::CompressionCodec::LZO:
-      return common::CompressionKind::CompressionKind_LZO;
+      return common::CompressionKind::CompressionKind_LZOHADOOP;
       break;
     case thrift::CompressionCodec::LZ4:
       return common::CompressionKind::CompressionKind_LZ4;
@@ -139,7 +139,7 @@ common::CompressionKind PageReader::thriftCodecToCompressionKind() {
       return common::CompressionKind::CompressionKind_ZSTD;
       break;
     case thrift::CompressionCodec::LZ4_RAW:
-      return common::CompressionKind::CompressionKind_LZ4;
+      return common::CompressionKind::CompressionKind_LZ4HADOOP;
     default:
       VELOX_UNSUPPORTED(
           "Unsupported compression type: " +

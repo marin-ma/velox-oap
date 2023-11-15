@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include "velox/common/compression/v2/Compression.h"
 #include "velox/dwio/common/SeekableInputStream.h"
 #include "velox/dwio/common/compression/Compression.h"
 
@@ -26,20 +27,21 @@ class PagedInputStream : public dwio::common::SeekableInputStream {
   PagedInputStream(
       std::unique_ptr<SeekableInputStream> inStream,
       memory::MemoryPool& memPool,
-      std::unique_ptr<Decompressor> decompressor,
+      std::unique_ptr<facebook::velox::common::Codec> codec,
       const dwio::common::encryption::Decrypter* decrypter,
       const std::string& streamDebugInfo,
+      uint64_t blockSize,
       bool useRawDecompression = false,
       size_t compressedLength = 0)
       : input_(std::move(inStream)),
         pool_(memPool),
         inputBuffer_(pool_),
-        decompressor_{std::move(decompressor)},
+        codec_{std::move(codec)},
         decrypter_{decrypter},
-        streamDebugInfo_{streamDebugInfo} {
+        streamDebugInfo_{streamDebugInfo},
+        blockSize_(blockSize) {
     DWIO_ENSURE(
-        decompressor_ || decrypter_,
-        "one of decompressor or decryptor is required");
+        codec_ || decrypter_, "one of decompressor or decryptor is required");
     DWIO_ENSURE(
         !useRawDecompression || compressedLength > 0,
         "For raw decompression, compressedLength should be greater than zero");
@@ -86,13 +88,15 @@ class PagedInputStream : public dwio::common::SeekableInputStream {
       std::unique_ptr<SeekableInputStream> inStream,
       memory::MemoryPool& memPool,
       const std::string& streamDebugInfo,
+      uint64_t blockSize,
       bool useRawDecompression = false,
       size_t compressedLength = 0)
       : input_(std::move(inStream)),
         pool_(memPool),
         inputBuffer_(pool_),
-        decompressor_{nullptr},
+        codec_{nullptr},
         decrypter_{nullptr},
+        blockSize_{blockSize},
         streamDebugInfo_{streamDebugInfo} {
     DWIO_ENSURE(
         !useRawDecompression || compressedLength > 0,
@@ -170,12 +174,14 @@ class PagedInputStream : public dwio::common::SeekableInputStream {
   int32_t lastWindowSize_{0};
 
   // decompressor
-  std::unique_ptr<Decompressor> decompressor_;
+  std::unique_ptr<facebook::velox::common::Codec> codec_;
 
   // decrypter
   const dwio::common::encryption::Decrypter* decrypter_;
 
   int64_t pendingSkip_{0};
+
+  uint64_t blockSize_;
 
  private:
   bool skipAllPending();

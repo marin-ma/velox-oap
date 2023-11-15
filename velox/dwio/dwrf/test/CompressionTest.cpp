@@ -456,16 +456,18 @@ VELOX_INSTANTIATE_TEST_SUITE_P(
 
 TEST(CompressionOptionsTest, testCompressionOptions) {
   auto options = getDwrfOrcCompressionOptions(
-      facebook::velox::common::CompressionKind_ZLIB, 256, 4, 7);
-
+      facebook::velox::common::CompressionKind_ZLIB, 4, 7);
+  auto gzipOptions =
+      std::dynamic_pointer_cast<facebook::velox::common::GzipCodecOptions>(
+          options);
   EXPECT_EQ(
-      options.format.zlib.windowBits, Compressor::DWRF_ORC_ZLIB_WINDOW_BITS);
-  EXPECT_EQ(options.format.zlib.compressionLevel, 4);
-  EXPECT_EQ(options.compressionThreshold, 256);
+      gzipOptions->windowBits,
+      facebook::velox::dwio::common::compression::Compressor::
+          DWRF_ORC_ZLIB_WINDOW_BITS);
+  EXPECT_EQ(gzipOptions->compressionLevel, 4);
 
   options = getDwrfOrcCompressionOptions(
-      facebook::velox::common::CompressionKind_ZSTD, 256, 4, 7);
+      facebook::velox::common::CompressionKind_ZSTD, 4, 7);
 
-  EXPECT_EQ(options.format.zstd.compressionLevel, 7);
-  EXPECT_EQ(options.compressionThreshold, 256);
+  EXPECT_EQ(options->compressionLevel, 7);
 }

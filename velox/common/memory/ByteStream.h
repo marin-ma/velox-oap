@@ -88,6 +88,46 @@ class OStreamOutputStream : public OutputStream {
   std::ostream* out_;
 };
 
+class BufferedOutputStream : public OutputStream {
+ public:
+  BufferedOutputStream() : buffer_(0) {}
+  BufferedOutputStream(size_t size) : buffer_(size) {}
+
+  void write(const char* s, std::streamsize count) override {
+    if (buffer_.empty()) {
+      buffer_.resize(count);
+    }
+    while (pos_ + count > buffer_.size()) {
+      buffer_.resize(buffer_.size() << 1);
+    }
+    std::memcpy(buffer_.data() + pos_, s, count);
+    pos_ += count;
+  }
+
+  std::streampos tellp() const override {
+    return pos_;
+  }
+
+  void seekp(std::streampos pos) override {
+    if (buffer_.empty()) {
+      buffer_.resize(pos);
+    }
+    while (pos >= buffer_.size()) {
+      buffer_.resize(buffer_.size() << 1);
+    }
+    pos_ = pos;
+  }
+
+  std::vector<uint8_t> finish() {
+    buffer_.resize(pos_);
+    return std::move(buffer_);
+  }
+
+ private:
+  std::vector<uint8_t> buffer_;
+  std::streampos pos_;
+};
+
 /// Stream over a chain of ByteRanges. Provides read, write and
 /// comparison for equality between stream contents and memory. Used
 /// for streams in repartitioning or for complex variable length data

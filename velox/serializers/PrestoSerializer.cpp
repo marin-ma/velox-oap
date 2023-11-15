@@ -16,6 +16,7 @@
 #include "velox/serializers/PrestoSerializer.h"
 #include "velox/common/base/Crc.h"
 #include "velox/common/base/RawVector.h"
+#include "velox/common/compression/v2/Compression.h"
 #include "velox/common/memory/ByteStream.h"
 #include "velox/functions/prestosql/types/TimestampWithTimeZoneType.h"
 #include "velox/vector/BiasVector.h"
@@ -2045,7 +2046,7 @@ class PrestoVectorSerializer : public VectorSerializer {
       bool useLosslessTimestamp,
       common::CompressionKind compressionKind)
       : streamArena_(streamArena),
-        codec_(common::compressionKindToCodec(compressionKind)) {
+        codec_(common::Codec::create(compressionKind)) {
     auto types = rowType->children();
     auto numTypes = types.size();
     streams_.resize(numTypes);
@@ -2090,9 +2091,8 @@ class PrestoVectorSerializer : public VectorSerializer {
       dataSize += stream->serializedSize();
     }
 
-    auto compressedSize = needCompression(*codec_)
-        ? codec_->maxCompressedLength(dataSize)
-        : dataSize;
+    auto compressedSize =
+        codec_ ? codec_->maxCompressedLength(dataSize) : dataSize;
     return kHeaderSize + compressedSize;
   }
 
@@ -2185,8 +2185,7 @@ class PrestoVectorSerializer : public VectorSerializer {
     writeInt32(output, numRows);
     output->write(&codec, 1);
 
-    IOBufOutputStream out(
-        *(streamArena_->pool()), nullptr, streamArena_->size());
+    BufferedOutputStream out{};
     writeInt32(&out, streams_.size());
 
     for (auto& stream : streams_) {
@@ -2194,14 +2193,17 @@ class PrestoVectorSerializer : public VectorSerializer {
     }
 
     const int32_t uncompressedSize = out.tellp();
-    VELOX_CHECK_LE(
+    auto outBuf = out.finish();
+    auto maxCompressedLength = codec_->maxCompressedLength(uncompressedSize);
+    std::vector<uint8_t> compressed(maxCompressedLength);
+    const auto compressedSize = codec_->compress(
         uncompressedSize,
-        codec_->maxUncompressedLength(),
-        "UncompressedSize exceeds limit");
-    auto compressed = codec_->compress(out.getIOBuf().get());
-    const int32_t compressedSize = compressed->length();
+        outBuf.data(),
+        maxCompressedLength,
+        compressed.data());
+    compressed.resize(compressedSize);
     writeInt32(output, uncompressedSize);
-    writeInt32(output, compressedSize);
+    writeInt32(output, (int32_t)compressedSize);
     const int32_t crcOffset = output->tellp();
     writeInt64(output, 0); // Write zero checksum
     // Number of columns and stream content. Unpause CRC.
@@ -2209,8 +2211,7 @@ class PrestoVectorSerializer : public VectorSerializer {
       listener->resume();
     }
     output->write(
-        reinterpret_cast<const char*>(compressed->writableData()),
-        compressed->length());
+        reinterpret_cast<const char*>(compressed.data()), compressedSize);
     // Pause CRC computation
     if (listener) {
       listener->pause();
@@ -2234,7 +2235,7 @@ class PrestoVectorSerializer : public VectorSerializer {
       listener->reset();
     }
 
-    if (!needCompression(*codec_)) {
+    if (!codec_) {
       flushUncompressed(numRows, out, listener);
     } else {
       flushCompressed(numRows, out, listener);
@@ -2245,7 +2246,7 @@ class PrestoVectorSerializer : public VectorSerializer {
   static const int32_t kHeaderSize{kSizeInBytesOffset + 4 + 4 + 8};
 
   StreamArena* const streamArena_;
-  const std::unique_ptr<folly::io::Codec> codec_;
+  const std::unique_ptr<common::Codec> codec_;
   int32_t numRows_{0};
   std::vector<std::unique_ptr<VectorStream>> streams_;
 };
@@ -2294,8 +2295,7 @@ void PrestoVectorSerde::deserialize(
     const Options* options) {
   const auto prestoOptions = toPrestoOptions(options);
   const bool useLosslessTimestamp = prestoOptions.useLosslessTimestamp;
-  const auto codec =
-      common::compressionKindToCodec(prestoOptions.compressionKind);
+  const auto codec = common::Codec::create(prestoOptions.compressionKind);
   const auto numRows = source->read<int32_t>();
 
   if (resultOffset > 0) {
@@ -2329,26 +2329,26 @@ void PrestoVectorSerde::deserialize(
       checksum, actualCheckSum, "Received corrupted serialized page.");
 
   VELOX_CHECK_EQ(
-      needCompression(*codec),
+      codec != nullptr,
       isCompressedBitSet(pageCodecMarker),
       "Compression kind {} should align with codec marker.",
-      common::compressionKindToString(
-          common::codecTypeToCompressionKind(codec->type())));
+      codec->name());
 
   auto& children = (*result)->children();
   const auto& childTypes = type->asRow().children();
-  if (!needCompression(*codec)) {
+  if (!codec) {
     const auto numColumns = source->read<int32_t>();
     VELOX_CHECK_EQ(numColumns, type->size());
     readColumns(
         source, pool, childTypes, children, resultOffset, useLosslessTimestamp);
   } else {
-    auto compressBuf = folly::IOBuf::create(compressedSize);
-    source->readBytes(compressBuf->writableData(), compressedSize);
-    compressBuf->append(compressedSize);
-    auto uncompress = codec->uncompress(compressBuf.get(), uncompressedSize);
-    ByteRange byteRange{
-        uncompress->writableData(), (int32_t)uncompress->length(), 0};
+    std::vector<uint8_t> compressed(compressedSize);
+    source->readBytes(compressed.data(), compressedSize);
+    std::vector<uint8_t> uncompress(uncompressedSize);
+    auto actualSize = codec->decompress(
+        compressedSize, compressed.data(), uncompressedSize, uncompress.data());
+    VELOX_CHECK_EQ(actualSize, uncompressedSize);
+    ByteRange byteRange{uncompress.data(), (int32_t)uncompressedSize, 0};
     ByteStream uncompressedSource;
     uncompressedSource.resetInput({byteRange});
 

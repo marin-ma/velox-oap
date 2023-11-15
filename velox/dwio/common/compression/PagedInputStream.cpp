@@ -177,20 +177,23 @@ bool PagedInputStream::readOrSkip(const void** data, int32_t* size) {
 
   // perform decompression
   if (state_ == State::START) {
-    DWIO_ENSURE_NOT_NULL(decompressor_.get(), "invalid stream state");
+    DWIO_ENSURE_NOT_NULL(codec_.get(), "invalid stream state");
     DWIO_ENSURE_NOT_NULL(input);
-    auto [decompressedLength, exact] =
-        decompressor_->getDecompressedLength(input, remainingLength_);
-    if (!data && exact && decompressedLength <= pendingSkip_) {
-      *size = decompressedLength;
+    auto inputAddress =
+        reinterpret_cast<const uint8_t*>(const_cast<char*>(input));
+    auto decompressedLength =
+        codec_->getUncompressedLength(remainingLength_, inputAddress);
+    if (!data && decompressedLength && *decompressedLength <= pendingSkip_) {
+      *size = *decompressedLength;
       outputBufferPtr_ = nullptr;
     } else {
-      prepareOutputBuffer(decompressedLength);
-      outputBufferLength_ = decompressor_->decompress(
-          input,
+      prepareOutputBuffer(
+          decompressedLength ? *decompressedLength : blockSize_);
+      outputBufferLength_ = codec_->decompress(
           remainingLength_,
-          outputBuffer_->data(),
-          outputBuffer_->capacity());
+          inputAddress,
+          outputBuffer_->capacity(),
+          reinterpret_cast<uint8_t*>(outputBuffer_->data()));
       if (data) {
         *data = outputBuffer_->data();
       }

@@ -17,6 +17,8 @@
 #pragma once
 
 #include "velox/common/compression/Compression.h"
+#include "velox/common/compression/v2/Compression.h"
+#include "velox/common/compression/v2/GzipCompression.h"
 #include "velox/dwio/common/BitConcatenation.h"
 #include "velox/dwio/common/DirectDecoder.h"
 #include "velox/dwio/common/SelectiveColumnReader.h"
@@ -479,20 +481,17 @@ class PageReader {
   // Add decoders for other encodings here.
 };
 
-FOLLY_ALWAYS_INLINE dwio::common::compression::CompressionOptions
+FOLLY_ALWAYS_INLINE std::shared_ptr<facebook::velox::common::CodecOptions>
 getParquetDecompressionOptions(common::CompressionKind kind) {
-  dwio::common::compression::CompressionOptions options;
-
   if (kind == common::CompressionKind_ZLIB ||
       kind == common::CompressionKind_GZIP) {
-    options.format.zlib.windowBits =
+    auto options =
+        std::make_shared<facebook::velox::common::GzipCodecOptions>();
+    options->windowBits =
         dwio::common::compression::Compressor::PARQUET_ZLIB_WINDOW_BITS;
-  } else if (
-      kind == common::CompressionKind_LZ4 ||
-      kind == common::CompressionKind_LZO) {
-    options.format.lz4_lzo.isHadoopFrameFormat = true;
+    return options;
   }
-  return options;
+  return std::make_shared<facebook::velox::common::CodecOptions>();
 }
 
 template <typename Visitor>
