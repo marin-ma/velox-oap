@@ -208,6 +208,8 @@ class ParquetData : public dwio::common::FormatData {
 
   // Count of leading skipped positions in 'presetNulls_'
   int32_t presetNullsConsumed_{0};
+
+  bool supportsPreDecompress_{true};
 };
 
 } // namespace facebook::velox::parquet

@@ -18,6 +18,7 @@
 
 #pragma once
 
+#include <folly/futures/Future.h>
 #include <cstdint>
 #include <limits>
 #include <memory>
@@ -242,5 +243,22 @@ class Codec {
       uint64_t inputLength,
       const uint8_t* input,
       std::optional<uint64_t> uncompressedLength) const;
+};
+
+class AsyncCodec {
+ public:
+  virtual ~AsyncCodec() = default;
+
+  virtual folly::SemiFuture<uint64_t> decompressAsync(
+      uint64_t srcLength,
+      const uint8_t* src,
+      uint64_t destLength,
+      uint8_t* dest) = 0;
+
+  virtual folly::SemiFuture<uint64_t> compressAsync(
+      uint64_t srcLength,
+      const uint8_t* src,
+      uint64_t destLength,
+      uint8_t* dest) = 0;
 };
 } // namespace facebook::velox::common

@@ -125,6 +125,35 @@ class GzipCodec : public Codec {
   bool decompressorInitialized_{false};
 };
 
+class DummyGzipAsyncCodec : public GzipCodec, public AsyncCodec {
+ public:
+  DummyGzipAsyncCodec()
+      : GzipCodec(
+            kGzipDefaultCompressionLevel,
+            GzipFormat::kGzip,
+            kGzip4KBWindowBits) {}
+
+  folly::SemiFuture<uint64_t> decompressAsync(
+      uint64_t srcLength,
+      const uint8_t* src,
+      uint64_t destLength,
+      uint8_t* dest) override {
+    return folly::makeSemiFuture().deferValue([&](auto&&) -> uint64_t {
+      return GzipCodec::decompress(srcLength, src, destLength, dest);
+    });
+  }
+
+  folly::SemiFuture<uint64_t> compressAsync(
+      uint64_t srcLength,
+      const uint8_t* src,
+      uint64_t destLength,
+      uint8_t* dest) override {
+    return folly::makeSemiFuture().deferValue([&](auto&&) -> uint64_t {
+      return GzipCodec::compress(srcLength, src, destLength, dest);
+    });
+  }
+};
+
 std::unique_ptr<Codec> makeGzipCodec(
     int compressionLevel = kGzipDefaultCompressionLevel,
     GzipFormat format = GzipFormat::kGzip,

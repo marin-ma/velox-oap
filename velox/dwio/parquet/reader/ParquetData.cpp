@@ -122,6 +122,9 @@ dwio::common::PositionProvider ParquetData::seekToRowGroup(uint32_t index) {
       type_,
       metadata.codec,
       metadata.total_compressed_size);
+  if (supportsPreDecompress_) {
+    reader_->initPreDecompressor();
+  }
   return dwio::common::PositionProvider(empty);
 }
 

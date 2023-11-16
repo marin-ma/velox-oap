@@ -29,8 +29,11 @@
 #include "velox/dwio/parquet/reader/StringDecoder.h"
 
 #include <arrow/util/rle_encoding.h>
+#include "velox/dwio/parquet/thrift/ParquetThriftTypes.h"
 
 namespace facebook::velox::parquet {
+
+class PagePreDecompressor;
 
 /// Manages access to pages inside a ColumnChunk. Interprets page headers and
 /// encodings and presents the combination of pages and encoded values as a
@@ -134,6 +137,8 @@ class PageReader {
   // bufferEnd_ to the corresponding positions.
   thrift::PageHeader readPageHeader();
 
+  void initPreDecompressor();
+
  private:
   // Indicates that we only want the repdefs for the next page. Used when
   // prereading repdefs with seekToPage.
@@ -184,6 +189,10 @@ class PageReader {
   // Updates row position / rep defs consumed info to refer to the first of the
   // next page.
   void updateRowInfoAfterPageSkipped();
+
+  void preDecompressNextPage();
+
+  std::optional<const char*> getPreDecompressedData(bool isDictionary);
 
   void prepareDataPageV1(const thrift::PageHeader& pageHeader, int64_t row);
   void prepareDataPageV2(const thrift::PageHeader& pageHeader, int64_t row);
@@ -422,6 +431,7 @@ class PageReader {
   dwio::common::DictionaryValues dictionary_;
   thrift::Encoding::type dictionaryEncoding_;
 
+  std::optional<thrift::PageHeader> pageHeader_{std::nullopt};
   // Offset of current page's header from start of ColumnChunk.
   uint64_t pageStart_{0};
 
@@ -479,6 +489,89 @@ class PageReader {
   std::unique_ptr<StringDecoder> stringDecoder_;
   std::unique_ptr<BooleanDecoder> booleanDecoder_;
   // Add decoders for other encodings here.
+
+  std::unique_ptr<PagePreDecompressor> preDecompressor_;
+};
+
+class PagePreDecompressor {
+ public:
+  static std::unique_ptr<PagePreDecompressor> create(
+      thrift::CompressionCodec::type codec);
+
+  virtual ~PagePreDecompressor() = default;
+
+  virtual void decompressAsync(
+      thrift::PageType::type pageType,
+      int64_t rowOfPage,
+      uint64_t compressedSize,
+      uint64_t uncompressedSize,
+      const char* compressedData) = 0;
+
+  virtual std::optional<const char*> getDecompressedData() = 0;
+
+  virtual bool validRange(int64_t row) = 0;
+};
+
+class IaaPagePreDecompressor : public PagePreDecompressor {
+ public:
+  IaaPagePreDecompressor() {
+    asyncCodec_ = std::make_unique<common::DummyGzipAsyncCodec>();
+  }
+
+  bool validRange(int64_t row) override {
+    return row == rowOfPage_;
+  }
+
+  void decompressAsync(
+      thrift::PageType::type pageType,
+      int64_t rowOfPage,
+      uint64_t compressedSize,
+      uint64_t uncompressedSize,
+      const char* compressedData) override {
+    if (pageType == thrift::PageType::DATA_PAGE_V2) {
+      return;
+    }
+    // TODO: Check window bits is 4KB. return if it's not.
+    if (futureValid_) {
+      // Wait for last future to complete.
+      futureValid_ = false;
+      std::move(decompressFuture_).getTry();
+    }
+
+    rowOfPage_ = rowOfPage;
+    decompressedData_.resize(uncompressedSize);
+    decompressFuture_ = asyncCodec_->decompressAsync(
+        compressedSize,
+        reinterpret_cast<const uint8_t*>(const_cast<char*>(compressedData)),
+        uncompressedSize,
+        reinterpret_cast<uint8_t*>(decompressedData_.data()));
+    futureValid_ = true;
+    uncompressedSize_ = uncompressedSize;
+  }
+
+  std::optional<const char*> getDecompressedData() override {
+    if (!futureValid_) {
+      return std::nullopt;
+    }
+    futureValid_ = false;
+    auto result = std::move(decompressFuture_).getTry();
+    if (result.hasException() || result.value() != uncompressedSize_) {
+      return std::nullopt;
+    }
+    return decompressedData_.data();
+  }
+
+ private:
+  std::unique_ptr<common::AsyncCodec> asyncCodec_;
+
+  folly::SemiFuture<uint64_t> decompressFuture_{
+      folly::SemiFuture<uint64_t>::makeEmpty()};
+  bool futureValid_{false};
+
+  // -1 indicates dictionary page.
+  int64_t rowOfPage_{-1};
+  std::vector<char> decompressedData_;
+  uint64_t uncompressedSize_;
 };
 
 FOLLY_ALWAYS_INLINE std::shared_ptr<facebook::velox::common::CodecOptions>
