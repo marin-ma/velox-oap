@@ -58,7 +58,8 @@ sudo --preserve-env apt update && sudo apt install -y \
   flex \
   libfl-dev \
   tzdata \
-  wget
+  wget \
+  nasm
 
 function run_and_time {
   time "$@"

@@ -14,3 +14,4 @@
 
 add_library(velox_dwio_common_compression LzoDecompressor.cpp)
 target_link_libraries(velox_dwio_common_compression Folly::folly)
+
