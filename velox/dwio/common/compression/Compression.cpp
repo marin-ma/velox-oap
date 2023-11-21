@@ -26,6 +26,10 @@
 #include <zstd.h>
 #include <zstd_errors.h>
 
+#ifdef VELOX_ENABLE_ISAL
+#include <isa-l/igzip_lib.h>
+#endif
+
 namespace facebook::velox::dwio::common::compression {
 
 using dwio::common::encryption::Decrypter;
@@ -115,6 +119,7 @@ class ZlibDecompressor : public Decompressor {
       int windowBits,
       const std::string& streamDebugInfo,
       bool izGzip = false);
+
   ~ZlibDecompressor() override;
 
   uint64_t decompress(
@@ -135,6 +140,38 @@ class ZlibDecompressor : public Decompressor {
 
   z_stream zstream_;
 };
+
+#ifdef VELOX_ENABLE_ISAL
+class IsalDecompressor : public Decompressor {
+ public:
+  explicit IsalDecompressor(
+      uint64_t blockSize,
+      const std::string& streamDebugInfo)
+      : Decompressor(blockSize, streamDebugInfo) {}
+
+  uint64_t decompress(
+      const char* src,
+      uint64_t srcLength,
+      char* dest,
+      uint64_t destLength) {
+    inflate_state stream;
+    memset(&stream, 0, sizeof(stream));
+    stream.crc_flag = ISAL_GZIP;
+    // Decompress.
+    stream.next_in = const_cast<Bytef*>(reinterpret_cast<const Bytef*>(src));
+    stream.avail_in = static_cast<uInt>(srcLength);
+    stream.next_out = reinterpret_cast<Bytef*>(dest);
+    stream.avail_out = static_cast<uInt>(destLength);
+    auto result = isal_inflate_stateless(&stream);
+    DWIO_ENSURE_EQ(
+        result,
+        ISAL_END_INPUT,
+        "Error in IsalDecompressor::decompress. error: ",
+        result);
+    return destLength - stream.avail_out;
+  }
+};
+#endif
 
 ZlibDecompressor::ZlibDecompressor(
     uint64_t blockSize,
@@ -509,6 +546,7 @@ class ZlibDecompressionStream : public PagedInputStream,
       size_t compressedLength = 0)
       : PagedInputStream{std::move(inStream), pool, streamDebugInfo, useRawDecompression, compressedLength},
         ZlibDecompressor{blockSize, windowBits, streamDebugInfo, isGzip} {}
+
   ~ZlibDecompressionStream() override = default;
 
   bool readOrSkip(const void** data, int32_t* size) override;
@@ -660,6 +698,11 @@ std::unique_ptr<dwio::common::SeekableInputStream> createDecompressor(
       // decompressor remain as nullptr
       break;
     case CompressionKind::CompressionKind_ZLIB:
+#ifdef VELOX_ENABLE_ISAL
+      decompressor =
+          std::make_unique<IsalDecompressor>(blockSize, streamDebugInfo);
+      break;
+#endif
       if (!decrypter) {
         // When file is not encrypted, we can use zlib streaming codec to avoid
         // copying data

@@ -63,7 +63,8 @@ sudo --preserve-env apt update && sudo --preserve-env apt install -y libunwind-d
   flex \
   libfl-dev \
   tzdata \
-  wget
+  wget \
+  nasm
 
 function run_and_time {
   time "$@"
