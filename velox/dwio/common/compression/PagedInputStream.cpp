@@ -15,6 +15,7 @@
  */
 
 #include "velox/dwio/common/compression/PagedInputStream.h"
+#include "velox/common/base/RuntimeMetrics.h"
 
 namespace facebook::velox::dwio::common::compression {
 
@@ -186,11 +187,19 @@ bool PagedInputStream::readOrSkip(const void** data, int32_t* size) {
       outputBufferPtr_ = nullptr;
     } else {
       prepareOutputBuffer(decompressedLength);
+      auto start = std::chrono::system_clock::now();
       outputBufferLength_ = decompressor_->decompress(
           input,
           remainingLength_,
           outputBuffer_->data(),
           outputBuffer_->capacity());
+      auto end = std::chrono::system_clock::now();
+      addThreadLocalRuntimeStat(
+          "scanDecompressTime",
+          RuntimeCounter(
+              std::chrono::duration_cast<std::chrono::nanoseconds>(end - start)
+                  .count(),
+              RuntimeCounter::Unit::kNanos));
       if (data) {
         *data = outputBuffer_->data();
       }
