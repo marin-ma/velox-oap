@@ -26,6 +26,7 @@
 #include <zlib.h>
 #include <zstd.h>
 #ifdef VELOX_ENABLE_ISAL
+#include <common/time/CpuWallTimer.h>
 #include <isa-l/igzip_lib.h>
 #endif
 
@@ -144,6 +145,12 @@ const char* FOLLY_NONNULL PageReader::uncompressData(
       VELOX_CHECK_EQ(uncompressedSize, sizeFromSnappy);
       snappy::RawUncompress(
           pageData, compressedSize, uncompressedData_->asMutable<char>());
+      auto decompressTime = std::chrono::duration_cast<std::chrono::nanoseconds>(
+          std::chrono::steady_clock::now() - start)
+          .count();
+      addThreadLocalRuntimeStat(
+          "scanDecompressTime",
+          RuntimeCounter(decompressTime, RuntimeCounter::Unit::kNanos));
       return uncompressedData_->as<char>();
     }
     case thrift::CompressionCodec::ZSTD: {
@@ -159,6 +166,12 @@ const char* FOLLY_NONNULL PageReader::uncompressData(
           !ZSTD_isError(ret),
           "ZSTD returned an error: ",
           ZSTD_getErrorName(ret));
+      auto decompressTime = std::chrono::duration_cast<std::chrono::nanoseconds>(
+          std::chrono::steady_clock::now() - start)
+          .count();
+      addThreadLocalRuntimeStat(
+          "scanDecompressTime",
+          RuntimeCounter(decompressTime, RuntimeCounter::Unit::kNanos));
       return uncompressedData_->as<char>();
     }
     case thrift::CompressionCodec::GZIP: {
@@ -176,6 +189,12 @@ const char* FOLLY_NONNULL PageReader::uncompressData(
           reinterpret_cast<Bytef*>(uncompressedData_->asMutable<char>());
       stream.avail_out = static_cast<uInt>(uncompressedSize);
       auto ret = isal_inflate_stateless(&stream);
+      auto decompressTime = std::chrono::duration_cast<std::chrono::nanoseconds>(
+          std::chrono::steady_clock::now() - start)
+          .count();
+      addThreadLocalRuntimeStat(
+          "scanDecompressTime",
+          RuntimeCounter(decompressTime, RuntimeCounter::Unit::kNanos));
       return uncompressedData_->as<char>();
 #else
       z_stream stream;
@@ -206,26 +225,18 @@ const char* FOLLY_NONNULL PageReader::uncompressData(
           ret == Z_STREAM_END,
           "GZipCodec failed: {}",
           stream.msg ? stream.msg : "");
+      auto decompressTime = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                std::chrono::steady_clock::now() - start)
+                                .count();
+      addThreadLocalRuntimeStat(
+          "scanDecompressTime",
+          RuntimeCounter(decompressTime, RuntimeCounter::Unit::kNanos));
       return uncompressedData_->as<char>();
 #endif
     }
     default:
       VELOX_FAIL("Unsupported Parquet compression type '{}'", codec_);
   }
-  auto decompressTime = std::chrono::duration_cast<std::chrono::nanoseconds>(
-      std::chrono::steady_clock::now() - start)
-      .count();
-  if (!getThreadLocalRunTimeStatWriter()) {
-    std::cout << "run time stat is null" << std::endl;
-  } else {
-    std::cout << "add scan decompress time: " << decompressTime << std::endl;
-    addThreadLocalRuntimeStat(
-        "scanDecompressTime",
-        RuntimeCounter(decompressTime, RuntimeCounter::Unit::kNanos));
-  }
-  addThreadLocalRuntimeStat(
-      "scanDecompressTime",
-      RuntimeCounter(decompressTime, RuntimeCounter::Unit::kNanos));
 }
 
 void PageReader::setPageRowInfo(bool forRepDef) {
