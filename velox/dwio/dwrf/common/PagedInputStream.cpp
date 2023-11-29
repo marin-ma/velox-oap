@@ -176,14 +176,9 @@ bool PagedInputStream::Next(const void** data, int32_t* size) {
     auto decompressTime = std::chrono::duration_cast<std::chrono::nanoseconds>(
                               std::chrono::steady_clock::now() - start)
                               .count();
-    if (!getThreadLocalRunTimeStatWriter()) {
-      std::cout << "run time stat is null" << std::endl;
-    } else {
-      std::cout << "add scan decompress time: " << decompressTime << std::endl;
-      addThreadLocalRuntimeStat(
-          "scanDecompressTime",
-          RuntimeCounter(decompressTime, RuntimeCounter::Unit::kNanos));
-    }
+    addThreadLocalRuntimeStat(
+        "scanDecompressTime",
+        RuntimeCounter(decompressTime, RuntimeCounter::Unit::kNanos));
     *data = outputBuffer_->data();
     *size = static_cast<int32_t>(outputBufferLength_);
     outputBufferPtr_ = outputBuffer_->data() + outputBufferLength_;
