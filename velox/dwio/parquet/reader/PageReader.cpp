@@ -215,6 +215,14 @@ const char* FOLLY_NONNULL PageReader::uncompressData(
   auto decompressTime = std::chrono::duration_cast<std::chrono::nanoseconds>(
       std::chrono::steady_clock::now() - start)
       .count();
+  if (!getThreadLocalRunTimeStatWriter()) {
+    std::cout << "run time stat is null" << std::endl;
+  } else {
+    std::cout << "add scan decompress time: " << decompressTime << std::endl;
+    addThreadLocalRuntimeStat(
+        "scanDecompressTime",
+        RuntimeCounter(decompressTime, RuntimeCounter::Unit::kNanos));
+  }
   addThreadLocalRuntimeStat(
       "scanDecompressTime",
       RuntimeCounter(decompressTime, RuntimeCounter::Unit::kNanos));
