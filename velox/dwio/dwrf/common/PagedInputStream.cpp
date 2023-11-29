@@ -15,9 +15,9 @@
  */
 
 #include "velox/dwio/dwrf/common/PagedInputStream.h"
+#include "velox/common/base/RuntimeMetrics.h"
 #include "velox/dwio/common/SeekableInputStream.h"
 #include "velox/dwio/common/exception/Exception.h"
-#include "velox/common/base/RuntimeMetrics.h"
 
 namespace facebook::velox::dwrf {
 
@@ -167,19 +167,23 @@ bool PagedInputStream::Next(const void** data, int32_t* size) {
     DWIO_ENSURE_NOT_NULL(decompressor_.get(), "invalid stream state");
     prepareOutputBuffer(
         decompressor_->getUncompressedLength(input, remainingLength_));
-    auto start = std::chrono::system_clock::now();
+    auto start = std::chrono::steady_clock::now();
     outputBufferLength_ = decompressor_->decompress(
         input,
         remainingLength_,
         outputBuffer_->data(),
         outputBuffer_->capacity());
-    auto end = std::chrono::system_clock::now();
-    addThreadLocalRuntimeStat(
-        "scanDecompressTime",
-        RuntimeCounter(
-            std::chrono::duration_cast<std::chrono::nanoseconds>(end - start)
-                .count(),
-            RuntimeCounter::Unit::kNanos));
+    auto decompressTime = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                              std::chrono::steady_clock::now() - start)
+                              .count();
+    if (!getThreadLocalRunTimeStatWriter()) {
+      std::cout << "run time stat is null" << std::endl;
+    } else {
+      std::cout << "add scan decompress time: " << decompressTime << std::endl;
+      addThreadLocalRuntimeStat(
+          "scanDecompressTime",
+          RuntimeCounter(decompressTime, RuntimeCounter::Unit::kNanos));
+    }
     *data = outputBuffer_->data();
     *size = static_cast<int32_t>(outputBufferLength_);
     outputBufferPtr_ = outputBuffer_->data() + outputBufferLength_;
