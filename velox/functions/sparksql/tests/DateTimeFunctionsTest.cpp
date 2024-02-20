@@ -17,6 +17,7 @@
 #include "velox/common/base/tests/GTestUtils.h"
 #include "velox/functions/sparksql/tests/SparkFunctionBaseTest.h"
 #include "velox/type/tz/TimeZoneMap.h"
+#include "velox/vector/tests/utils/VectorTestBase.h"
 
 namespace facebook::velox::functions::sparksql::test {
 namespace {
@@ -755,6 +756,108 @@ TEST_F(DateTimeFunctionsTest, fromUnixtime) {
       fromUnixTime(0, "FF/MM/dd"), "Specifier F is not supported");
   VELOX_ASSERT_THROW(
       fromUnixTime(0, "yyyy-MM-dd HH:II"), "Specifier I is not supported");
+}
+
+TEST_F(DateTimeFunctionsTest, makeTimestamp) {
+  const auto testMakeTimestamp = [&](const RowVectorPtr& data,
+                                     const VectorPtr& expected,
+                                     bool hasTimeZone) {
+    auto result = hasTimeZone
+        ? evaluate("make_timestamp(c0, c1, c2, c3, c4, c5, c6)", data)
+        : evaluate("make_timestamp(c0, c1, c2, c3, c4, c5)", data);
+    facebook::velox::test::assertEqualVectors(expected, result);
+  };
+  const auto microsType = DECIMAL(18, 6);
+
+  // Valid cases w/o timezone.
+  {
+    const auto year = makeFlatVector<int32_t>({2021, 1, 1, 1, 1});
+    const auto month = makeFlatVector<int32_t>({07, 1, 1, 1, 1});
+    const auto day = makeFlatVector<int32_t>({11, 1, 1, 1, 1});
+    const auto hour = makeFlatVector<int32_t>({6, 1, 1, 1, 1});
+    const auto minute = makeFlatVector<int32_t>({30, 1, 1, 1, 1});
+    const auto micros = makeNullableFlatVector<int64_t>(
+        {45678000, 1e6, 6e7, 59999999, std::nullopt}, microsType);
+    auto expected = makeNullableFlatVector<Timestamp>(
+        {util::fromTimestampString("2021-07-11 06:30:45.678"),
+         util::fromTimestampString("0001-01-01 01:01:01"),
+         util::fromTimestampString("0001-01-01 01:02:00"),
+         util::fromTimestampString("0001-01-01 01:01:59.999999"),
+         std::nullopt});
+    auto data = makeRowVector({year, month, day, hour, minute, micros});
+    testMakeTimestamp(data, expected, false);
+  }
+
+  // Valid cases w/ timezone.
+  {
+    const auto year = makeFlatVector<int32_t>({2021, 2021, 1});
+    const auto month = makeFlatVector<int32_t>({07, 07, 1});
+    const auto day = makeFlatVector<int32_t>({11, 11, 1});
+    const auto hour = makeFlatVector<int32_t>({6, 6, 1});
+    const auto minute = makeFlatVector<int32_t>({30, 30, 1});
+    const auto micros =
+        makeNullableFlatVector<int64_t>({45678000, 45678000, 1e6}, microsType);
+    const auto timezone =
+        makeNullableFlatVector<StringView>({"GMT", "CET", std::nullopt});
+    auto data =
+        makeRowVector({year, month, day, hour, minute, micros, timezone});
+    {
+      setQueryTimeZone("UTC");
+      auto expected = makeNullableFlatVector<Timestamp>(
+          {util::fromTimestampString("2021-07-11 06:30:45.678"),
+           util::fromTimestampString("2021-07-11 04:30:45.678"),
+           std::nullopt});
+      testMakeTimestamp(data, expected, true);
+    }
+    {
+      setQueryTimeZone("Asia/Shanghai");
+      auto expected = makeNullableFlatVector<Timestamp>(
+          {util::fromTimestampString("2021-07-11 14:30:45.678"),
+           util::fromTimestampString("2021-07-11 12:30:45.678"),
+           std::nullopt});
+      testMakeTimestamp(data, expected, true);
+    }
+  }
+
+  // Invalid cases.
+  {
+    const auto year = makeFlatVector<int32_t>(std::vector<int32_t>{1});
+    const auto month = makeFlatVector<int32_t>(std::vector<int32_t>{1});
+    const auto day = makeFlatVector<int32_t>(std::vector<int32_t>{1});
+    const auto hour = makeFlatVector<int32_t>(std::vector<int32_t>{1});
+    const auto minute = makeFlatVector<int32_t>(std::vector<int32_t>{1});
+
+    const auto testMicrosError = [&](int64_t microsec,
+                                     const TypePtr& microsType,
+                                     const std::string& expectedError) {
+      const auto micros =
+          makeFlatVector<int64_t>(std::vector<int64_t>{microsec}, microsType);
+      auto data = makeRowVector({year, month, day, hour, minute, micros});
+      VELOX_ASSERT_THROW(
+          evaluate("make_timestamp(c0, c1, c2, c3, c4, c5)", data),
+          expectedError);
+    };
+    testMicrosError(
+        61e6,
+        microsType,
+        "Invalid value for SecondOfMinute (valid values 0 - 59): 61.");
+    testMicrosError(
+        99999999,
+        microsType,
+        "Invalid value for SecondOfMinute (valid values 0 - 59): 99.");
+    testMicrosError(
+        999999999,
+        microsType,
+        "Invalid value for SecondOfMinute (valid values 0 - 59): 999.");
+    testMicrosError(
+        60007000,
+        microsType,
+        "The fraction of sec must be zero. Valid range is [0, 60].");
+    testMicrosError(
+        60007000,
+        DECIMAL(18, 8),
+        "Seconds fraction must have 6 digits for microseconds but got 8");
+  }
 }
 
 } // namespace

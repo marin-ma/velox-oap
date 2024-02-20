@@ -201,3 +201,13 @@ These functions support TIMESTAMP and DATE input types.
 .. spark:function:: year(x) -> integer
 
     Returns the year from ``x``.
+
+.. spark:function:: make_timestamp(year, month, day, hour, min, sec[, timezone]) -> timestamp
+
+    Create timestamp from ``year``, ``month``, ``day``, ``hour``, ``min``, ``sec`` and ``timezone`` fields. ::
+
+        SELECT make_timestamp(2014, 12, 28, 6, 30, 45.887); -- 2014-12-28 06:30:45.887
+        SELECT make_timestamp(2014, 12, 28, 6, 30, 45.887, 'CET'); -- 2014-12-27 21:30:45.887
+        SELECT make_timestamp(2019, 6, 30, 23, 59, 60); -- 2019-07-01 00:00:00
+        SELECT make_timestamp(2019, 6, 30, 23, 59, 1); -- 2019-06-30 23:59:01
+        SELECT make_timestamp(null, 7, 22, 15, 30, 0); -- NULL
