@@ -148,7 +148,8 @@ std::shared_ptr<exec::VectorFunction> createMakeTimestampFunction(
     const core::QueryConfig& config) {
   VELOX_USER_CHECK(
       inputArgs[5].type->isShortDecimal(),
-      "Seconds must be short decimal type but got {}", inputArgs[5].type->toString());
+      "Seconds must be short decimal type but got {}",
+      inputArgs[5].type->toString());
   auto microsType = inputArgs[5].type->asShortDecimal();
   VELOX_USER_CHECK(
       microsType.scale() == 6,
