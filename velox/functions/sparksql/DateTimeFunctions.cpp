@@ -31,14 +31,13 @@ Timestamp makeTimeStampFromDecodedArgs(
     DecodedVector* micros) {
   auto totalMicros = micros->valueAt<int64_t>(row);
   auto seconds = totalMicros / util::kMicrosPerSec;
-  auto nanos = totalMicros % util::kMicrosPerSec;
   VELOX_USER_CHECK(
       seconds <= 60,
       "Invalid value for SecondOfMinute (valid values 0 - 59): {}.",
       seconds);
   if (seconds == 60) {
     VELOX_USER_CHECK(
-        nanos == 0,
+        totalMicros % util::kMicrosPerSec == 0,
         "The fraction of sec must be zero. Valid range is [0, 60].");
   }
 
@@ -54,7 +53,7 @@ Timestamp makeTimeStampFromDecodedArgs(
 
 class MakeTimestampFunction : public exec::VectorFunction {
  public:
-  MakeTimestampFunction() = default;
+  MakeTimestampFunction(int64_t sessionTzID) : sessionTzID_(sessionTzID) {}
 
   void apply(
       const SelectivityVector& rows,
@@ -62,12 +61,6 @@ class MakeTimestampFunction : public exec::VectorFunction {
       const TypePtr& outputType,
       exec::EvalCtx& context,
       VectorPtr& result) const override {
-    auto microsType = args[5]->type()->asShortDecimal();
-    VELOX_USER_CHECK(
-        microsType.scale() == 6,
-        "Seconds fraction must have 6 digits for microseconds but got {}",
-        microsType.scale());
-
     context.ensureWritable(rows, TIMESTAMP(), result);
     auto* resultFlatVector = result->as<FlatVector<Timestamp>>();
 
@@ -108,16 +101,10 @@ class MakeTimestampFunction : public exec::VectorFunction {
     } else {
       // Otherwise use session timezone. If session timezone is not specified,
       // use default value 0(UTC timezone).
-      int64_t sessionTzID = 0;
-      const auto& queryConfig = context.execCtx()->queryCtx()->queryConfig();
-      const auto sessionTzName = queryConfig.sessionTimezone();
-      if (!sessionTzName.empty()) {
-        sessionTzID = util::getTimeZoneID(sessionTzName);
-      }
       rows.applyToSelected([&](vector_size_t row) {
         auto timestamp = makeTimeStampFromDecodedArgs(
             row, year, month, day, hour, minute, micros);
-        timestamp.toGMT(sessionTzID);
+        timestamp.toGMT(sessionTzID_);
         resultFlatVector->set(row, timestamp);
       });
     }
@@ -150,12 +137,35 @@ class MakeTimestampFunction : public exec::VectorFunction {
             .build(),
     };
   }
+
+ private:
+  int64_t sessionTzID_;
 };
+
+std::shared_ptr<exec::VectorFunction> createMakeTimestampFunction(
+    const std::string& /* name */,
+    const std::vector<exec::VectorFunctionArg>& inputArgs,
+    const core::QueryConfig& config) {
+  VELOX_USER_CHECK(
+      inputArgs[5].type->isShortDecimal(),
+      "Seconds must be short decimal type but got {}", inputArgs[5].type->toString());
+  auto microsType = inputArgs[5].type->asShortDecimal();
+  VELOX_USER_CHECK(
+      microsType.scale() == 6,
+      "Seconds fraction must have 6 digits for microseconds but got {}",
+      microsType.scale());
+
+  const auto sessionTzName = config.sessionTimezone();
+  const auto sessionTzID =
+      sessionTzName.empty() ? 0 : util::getTimeZoneID(sessionTzName);
+
+  return std::make_shared<MakeTimestampFunction>(sessionTzID);
+}
 } // namespace
 
-VELOX_DECLARE_VECTOR_FUNCTION(
+VELOX_DECLARE_STATEFUL_VECTOR_FUNCTION(
     udf_make_timestamp,
     MakeTimestampFunction::signatures(),
-    std::make_unique<MakeTimestampFunction>());
+    createMakeTimestampFunction);
 
 } // namespace facebook::velox::functions::sparksql

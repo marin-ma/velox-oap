@@ -767,7 +767,17 @@ TEST_F(DateTimeFunctionsTest, makeTimestamp) {
         : evaluate("make_timestamp(c0, c1, c2, c3, c4, c5)", data);
     facebook::velox::test::assertEqualVectors(expected, result);
   };
-  const auto microsType = DECIMAL(18, 6);
+
+  const auto testConstantTimezone = [&](const RowVectorPtr& data,
+                                        const std::string& timezone,
+                                        const VectorPtr& expected) {
+    auto result = evaluate(
+        fmt::format("make_timestamp(c0, c1, c2, c3, c4, c5, '{}')", timezone),
+        data);
+    facebook::velox::test::assertEqualVectors(expected, result);
+  };
+
+  const auto microsType = DECIMAL(16, 6);
 
   // Valid cases w/o timezone.
   {
@@ -779,25 +789,28 @@ TEST_F(DateTimeFunctionsTest, makeTimestamp) {
     const auto micros = makeNullableFlatVector<int64_t>(
         {45678000, 1e6, 6e7, 59999999, std::nullopt}, microsType);
     auto data = makeRowVector({year, month, day, hour, minute, micros});
-    {
-      auto expected = makeNullableFlatVector<Timestamp>(
-          {util::fromTimestampString("2021-07-11 06:30:45.678"),
-           util::fromTimestampString("2021-07-11 06:30:01"),
-           util::fromTimestampString("2021-07-11 06:31:00"),
-           util::fromTimestampString("2021-07-11 06:30:59.999999"),
-           std::nullopt});
-      testMakeTimestamp(data, expected, false);
-    }
-    {
-      setQueryTimeZone("Asia/Shanghai");
-      auto expected = makeNullableFlatVector<Timestamp>(
-          {util::fromTimestampString("2021-07-10 22:30:45.678"),
-           util::fromTimestampString("2021-07-10 22:30:01"),
-           util::fromTimestampString("2021-07-10 22:31:00"),
-           util::fromTimestampString("2021-07-10 22:30:59.999999"),
-           std::nullopt});
-      testMakeTimestamp(data, expected, false);
-    }
+
+    // Test w/o session timezone.
+    setQueryTimeZone("");
+    auto expectedGMT = makeNullableFlatVector<Timestamp>(
+        {util::fromTimestampString("2021-07-11 06:30:45.678"),
+         util::fromTimestampString("2021-07-11 06:30:01"),
+         util::fromTimestampString("2021-07-11 06:31:00"),
+         util::fromTimestampString("2021-07-11 06:30:59.999999"),
+         std::nullopt});
+    testMakeTimestamp(data, expectedGMT, false);
+    testConstantTimezone(data, "GMT", expectedGMT);
+
+    // Test w/ session timezone.
+    setQueryTimeZone("Asia/Shanghai");
+    auto expectedSessionTimezone = makeNullableFlatVector<Timestamp>(
+        {util::fromTimestampString("2021-07-10 22:30:45.678"),
+         util::fromTimestampString("2021-07-10 22:30:01"),
+         util::fromTimestampString("2021-07-10 22:31:00"),
+         util::fromTimestampString("2021-07-10 22:30:59.999999"),
+         std::nullopt});
+    testMakeTimestamp(data, expectedSessionTimezone, false);
+    testConstantTimezone(data, "GMT", expectedGMT);
   }
 
   // Valid cases w/ timezone.
@@ -814,6 +827,7 @@ TEST_F(DateTimeFunctionsTest, makeTimestamp) {
     auto data =
         makeRowVector({year, month, day, hour, minute, micros, timezone});
     {
+      setQueryTimeZone("");
       auto expected = makeNullableFlatVector<Timestamp>(
           {util::fromTimestampString("2021-07-11 06:30:45.678"),
            util::fromTimestampString("2021-07-11 04:30:45.678"),
@@ -864,6 +878,10 @@ TEST_F(DateTimeFunctionsTest, makeTimestamp) {
         60007000,
         microsType,
         "The fraction of sec must be zero. Valid range is [0, 60].");
+    testMicrosError(
+        60007000,
+        DECIMAL(20, 8),
+        "Seconds must be short decimal type but got DECIMAL(20, 8)");
     testMicrosError(
         60007000,
         DECIMAL(18, 8),
