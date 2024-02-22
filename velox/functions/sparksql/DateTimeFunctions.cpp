@@ -69,26 +69,7 @@ class MakeTimestampFunction : public exec::VectorFunction {
         microsType.scale());
 
     context.ensureWritable(rows, TIMESTAMP(), result);
-
-    int64_t sessionTzID = 0;
-    const auto& queryConfig = context.execCtx()->queryCtx()->queryConfig();
-    const auto sessionTzName = queryConfig.sessionTimezone();
-    if (!sessionTzName.empty()) {
-      sessionTzID = util::getTimeZoneID(sessionTzName);
-    }
-
-    bool hasTimeZone = false;
-    std::optional<int64_t> timeZoneID = std::nullopt;
-    if (args.size() == 7) {
-      hasTimeZone = true;
-      if (args[6]->isConstantEncoding()) {
-        timeZoneID =
-            util::getTimeZoneID(args[6]
-                                    ->asUnchecked<ConstantVector<StringView>>()
-                                    ->valueAt(0)
-                                    .str());
-      }
-    }
+    auto* resultFlatVector = result->as<FlatVector<Timestamp>>();
 
     exec::DecodedArgs decodedArgs(rows, args, context);
     auto year = decodedArgs.at(0);
@@ -98,14 +79,19 @@ class MakeTimestampFunction : public exec::VectorFunction {
     auto minute = decodedArgs.at(4);
     auto micros = decodedArgs.at(5);
 
-    auto* resultFlatVector = result->as<FlatVector<Timestamp>>();
-    if (hasTimeZone) {
-      if (timeZoneID.has_value()) {
+    if (args.size() == 7) {
+      // If the timezone argument is specified, treat the input timestamp as the
+      // time in that timezone.
+      if (args[6]->isConstantEncoding()) {
+        auto constantTzID =
+            util::getTimeZoneID(args[6]
+                                    ->asUnchecked<ConstantVector<StringView>>()
+                                    ->valueAt(0)
+                                    .str());
         rows.applyToSelected([&](vector_size_t row) {
           auto timestamp = makeTimeStampFromDecodedArgs(
               row, year, month, day, hour, minute, micros);
-          timestamp.toGMT(*timeZoneID);
-          timestamp.toTimezone(sessionTzID);
+          timestamp.toGMT(constantTzID);
           resultFlatVector->set(row, timestamp);
         });
       } else {
@@ -116,21 +102,28 @@ class MakeTimestampFunction : public exec::VectorFunction {
           auto tzID =
               util::getTimeZoneID(timeZone->valueAt<StringView>(row).str());
           timestamp.toGMT(tzID);
-          timestamp.toTimezone(sessionTzID);
           resultFlatVector->set(row, timestamp);
         });
       }
     } else {
+      // Otherwise use session timezone. If session timezone is not specified,
+      // use default value 0(UTC timezone).
+      int64_t sessionTzID = 0;
+      const auto& queryConfig = context.execCtx()->queryCtx()->queryConfig();
+      const auto sessionTzName = queryConfig.sessionTimezone();
+      if (!sessionTzName.empty()) {
+        sessionTzID = util::getTimeZoneID(sessionTzName);
+      }
       rows.applyToSelected([&](vector_size_t row) {
         auto timestamp = makeTimeStampFromDecodedArgs(
             row, year, month, day, hour, minute, micros);
+        timestamp.toGMT(sessionTzID);
         resultFlatVector->set(row, timestamp);
       });
     }
   }
 
   static std::vector<std::shared_ptr<exec::FunctionSignature>> signatures() {
-    // json -> varchar
     return {
         exec::FunctionSignatureBuilder()
             .integerVariable("precision")

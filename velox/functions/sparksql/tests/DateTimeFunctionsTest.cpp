@@ -771,21 +771,33 @@ TEST_F(DateTimeFunctionsTest, makeTimestamp) {
 
   // Valid cases w/o timezone.
   {
-    const auto year = makeFlatVector<int32_t>({2021, 1, 1, 1, 1});
-    const auto month = makeFlatVector<int32_t>({07, 1, 1, 1, 1});
-    const auto day = makeFlatVector<int32_t>({11, 1, 1, 1, 1});
-    const auto hour = makeFlatVector<int32_t>({6, 1, 1, 1, 1});
-    const auto minute = makeFlatVector<int32_t>({30, 1, 1, 1, 1});
+    const auto year = makeFlatVector<int32_t>({2021, 2021, 2021, 2021, 2021});
+    const auto month = makeFlatVector<int32_t>({7, 7, 7, 7, 7});
+    const auto day = makeFlatVector<int32_t>({11, 11, 11, 11, 11});
+    const auto hour = makeFlatVector<int32_t>({6, 6, 6, 6, 6});
+    const auto minute = makeFlatVector<int32_t>({30, 30, 30, 30, 30});
     const auto micros = makeNullableFlatVector<int64_t>(
         {45678000, 1e6, 6e7, 59999999, std::nullopt}, microsType);
-    auto expected = makeNullableFlatVector<Timestamp>(
-        {util::fromTimestampString("2021-07-11 06:30:45.678"),
-         util::fromTimestampString("0001-01-01 01:01:01"),
-         util::fromTimestampString("0001-01-01 01:02:00"),
-         util::fromTimestampString("0001-01-01 01:01:59.999999"),
-         std::nullopt});
     auto data = makeRowVector({year, month, day, hour, minute, micros});
-    testMakeTimestamp(data, expected, false);
+    {
+      auto expected = makeNullableFlatVector<Timestamp>(
+          {util::fromTimestampString("2021-07-11 06:30:45.678"),
+           util::fromTimestampString("2021-07-11 06:30:01"),
+           util::fromTimestampString("2021-07-11 06:31:00"),
+           util::fromTimestampString("2021-07-11 06:30:59.999999"),
+           std::nullopt});
+      testMakeTimestamp(data, expected, false);
+    }
+    {
+      setQueryTimeZone("Asia/Shanghai");
+      auto expected = makeNullableFlatVector<Timestamp>(
+          {util::fromTimestampString("2021-07-10 22:30:45.678"),
+           util::fromTimestampString("2021-07-10 22:30:01"),
+           util::fromTimestampString("2021-07-10 22:31:00"),
+           util::fromTimestampString("2021-07-10 22:30:59.999999"),
+           std::nullopt});
+      testMakeTimestamp(data, expected, false);
+    }
   }
 
   // Valid cases w/ timezone.
@@ -802,7 +814,6 @@ TEST_F(DateTimeFunctionsTest, makeTimestamp) {
     auto data =
         makeRowVector({year, month, day, hour, minute, micros, timezone});
     {
-      setQueryTimeZone("UTC");
       auto expected = makeNullableFlatVector<Timestamp>(
           {util::fromTimestampString("2021-07-11 06:30:45.678"),
            util::fromTimestampString("2021-07-11 04:30:45.678"),
@@ -812,8 +823,8 @@ TEST_F(DateTimeFunctionsTest, makeTimestamp) {
     {
       setQueryTimeZone("Asia/Shanghai");
       auto expected = makeNullableFlatVector<Timestamp>(
-          {util::fromTimestampString("2021-07-11 14:30:45.678"),
-           util::fromTimestampString("2021-07-11 12:30:45.678"),
+          {util::fromTimestampString("2021-07-11 06:30:45.678"),
+           util::fromTimestampString("2021-07-11 04:30:45.678"),
            std::nullopt});
       testMakeTimestamp(data, expected, true);
     }
