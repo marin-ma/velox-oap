@@ -45,7 +45,7 @@ std::optional<Timestamp> makeTimeStampFromDecodedArgs(
     return std::nullopt;
   }
   auto seconds = micros / util::kMicrosPerSec;
-  if (seconds > 60 || seconds == 60 && micros % util::kMicrosPerSec != 0) {
+  if (seconds > 60 || (seconds == 60 && micros % util::kMicrosPerSec != 0)) {
     // Invalid microsecond.
     return std::nullopt;
   }
