@@ -46,7 +46,6 @@ std::optional<Timestamp> makeTimeStampFromDecodedArgs(
   }
   auto seconds = micros / util::kMicrosPerSec;
   if (seconds > 60 || (seconds == 60 && micros % util::kMicrosPerSec != 0)) {
-    // Invalid microsecond.
     return std::nullopt;
   }
 
@@ -57,8 +56,7 @@ std::optional<Timestamp> makeTimeStampFromDecodedArgs(
         monthVector->valueAt<int32_t>(row),
         dayVector->valueAt<int32_t>(row));
     auto localMicros =
-        hourVector->valueAt<int32_t>(row) * util::kMicrosPerHour +
-        minuteVector->valueAt<int32_t>(row) * util::kMicrosPerMinute + micros;
+        hour * util::kMicrosPerHour + minute * util::kMicrosPerMinute + micros;
     return util::fromDatetime(daysSinceEpoch, localMicros);
   } catch (const VeloxException& e) {
     if (!e.isUserError()) {
