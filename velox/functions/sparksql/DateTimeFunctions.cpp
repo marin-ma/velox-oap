@@ -21,34 +21,66 @@
 namespace facebook::velox::functions::sparksql {
 namespace {
 
-Timestamp makeTimeStampFromDecodedArgs(
+std::optional<Timestamp> makeTimeStampFromDecodedArgs(
     vector_size_t row,
-    DecodedVector* year,
-    DecodedVector* month,
-    DecodedVector* day,
-    DecodedVector* hour,
-    DecodedVector* minute,
-    DecodedVector* micros) {
-  auto totalMicros = micros->valueAt<int64_t>(row);
-  auto seconds = totalMicros / util::kMicrosPerSec;
-  VELOX_USER_CHECK(
-      seconds <= 60,
-      "Invalid value for SecondOfMinute (valid values 0 - 59): {}.",
-      seconds);
-  if (seconds == 60) {
-    VELOX_USER_CHECK(
-        totalMicros % util::kMicrosPerSec == 0,
-        "The fraction of sec must be zero. Valid range is [0, 60].");
+    DecodedVector* yearVector,
+    DecodedVector* monthVector,
+    DecodedVector* dayVector,
+    DecodedVector* hourVector,
+    DecodedVector* minuteVector,
+    DecodedVector* microsVector) {
+  // Check hour.
+  auto hour = hourVector->valueAt<int32_t>(row);
+  if (hour < 0 || hour > 24) {
+    return std::nullopt;
+  }
+  // Check miniute.
+  auto minute = minuteVector->valueAt<int32_t>(row);
+  if (minute < 0 || minute > 60) {
+    return std::nullopt;
+  }
+  // Check microseconds.
+  auto micros = microsVector->valueAt<int64_t>(row);
+  if (micros < 0) {
+    return std::nullopt;
+  }
+  auto seconds = micros / util::kMicrosPerSec;
+  if (seconds > 60 || seconds == 60 && micros % util::kMicrosPerSec != 0) {
+    // Invalid microsecond.
+    return std::nullopt;
   }
 
-  auto daysSinceEpoch = util::daysSinceEpochFromDate(
-      year->valueAt<int32_t>(row),
-      month->valueAt<int32_t>(row),
-      day->valueAt<int32_t>(row));
-  auto localMicros = hour->valueAt<int32_t>(row) * util::kMicrosPerHour +
-      minute->valueAt<int32_t>(row) * util::kMicrosPerMinute +
-      micros->valueAt<int64_t>(row);
-  return util::fromDatetime(daysSinceEpoch, localMicros);
+  // year, month, day will be checked in utils::daysSinceEpochFromDate;
+  try {
+    auto daysSinceEpoch = util::daysSinceEpochFromDate(
+        yearVector->valueAt<int32_t>(row),
+        monthVector->valueAt<int32_t>(row),
+        dayVector->valueAt<int32_t>(row));
+    auto localMicros =
+        hourVector->valueAt<int32_t>(row) * util::kMicrosPerHour +
+        minuteVector->valueAt<int32_t>(row) * util::kMicrosPerMinute + micros;
+    return util::fromDatetime(daysSinceEpoch, localMicros);
+  } catch (const VeloxException& e) {
+    if (!e.isUserError()) {
+      throw;
+    }
+    return std::nullopt;
+  } catch (const std::exception&) {
+    throw;
+  }
+}
+
+void setTimestampOrNull(
+    int32_t row,
+    std::optional<Timestamp> timestamp,
+    int64_t tzID,
+    FlatVector<Timestamp>* result) {
+  if (timestamp.has_value()) {
+    (*timestamp).toGMT(tzID);
+    result->set(row, *timestamp);
+  } else {
+    result->setNull(row, true);
+  }
 }
 
 class MakeTimestampFunction : public exec::VectorFunction {
@@ -84,8 +116,7 @@ class MakeTimestampFunction : public exec::VectorFunction {
         rows.applyToSelected([&](vector_size_t row) {
           auto timestamp = makeTimeStampFromDecodedArgs(
               row, year, month, day, hour, minute, micros);
-          timestamp.toGMT(constantTzID);
-          resultFlatVector->set(row, timestamp);
+          setTimestampOrNull(row, timestamp, constantTzID, resultFlatVector);
         });
       } else {
         auto timeZone = decodedArgs.at(6);
@@ -94,8 +125,7 @@ class MakeTimestampFunction : public exec::VectorFunction {
               row, year, month, day, hour, minute, micros);
           auto tzID =
               util::getTimeZoneID(timeZone->valueAt<StringView>(row).str());
-          timestamp.toGMT(tzID);
-          resultFlatVector->set(row, timestamp);
+          setTimestampOrNull(row, timestamp, tzID, resultFlatVector);
         });
       }
     } else {
@@ -104,8 +134,7 @@ class MakeTimestampFunction : public exec::VectorFunction {
       rows.applyToSelected([&](vector_size_t row) {
         auto timestamp = makeTimeStampFromDecodedArgs(
             row, year, month, day, hour, minute, micros);
-        timestamp.toGMT(sessionTzID_);
-        resultFlatVector->set(row, timestamp);
+        setTimestampOrNull(row, timestamp, sessionTzID_, resultFlatVector);
       });
     }
   }

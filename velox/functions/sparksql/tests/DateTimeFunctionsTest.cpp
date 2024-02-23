@@ -779,7 +779,7 @@ TEST_F(DateTimeFunctionsTest, makeTimestamp) {
 
   const auto microsType = DECIMAL(16, 6);
 
-  // Valid cases w/o timezone.
+  // Valid cases w/o time zone argument.
   {
     const auto year = makeFlatVector<int32_t>({2021, 2021, 2021, 2021, 2021});
     const auto month = makeFlatVector<int32_t>({7, 7, 7, 7, 7});
@@ -790,7 +790,7 @@ TEST_F(DateTimeFunctionsTest, makeTimestamp) {
         {45678000, 1e6, 6e7, 59999999, std::nullopt}, microsType);
     auto data = makeRowVector({year, month, day, hour, minute, micros});
 
-    // Test w/o session timezone.
+    // Test w/o session time zone.
     setQueryTimeZone("");
     auto expectedGMT = makeNullableFlatVector<Timestamp>(
         {util::fromTimestampString("2021-07-11 06:30:45.678"),
@@ -801,7 +801,7 @@ TEST_F(DateTimeFunctionsTest, makeTimestamp) {
     testMakeTimestamp(data, expectedGMT, false);
     testConstantTimezone(data, "GMT", expectedGMT);
 
-    // Test w/ session timezone.
+    // Test w/ session time zone.
     setQueryTimeZone("Asia/Shanghai");
     auto expectedSessionTimezone = makeNullableFlatVector<Timestamp>(
         {util::fromTimestampString("2021-07-10 22:30:45.678"),
@@ -813,7 +813,7 @@ TEST_F(DateTimeFunctionsTest, makeTimestamp) {
     testConstantTimezone(data, "GMT", expectedGMT);
   }
 
-  // Valid cases w/ timezone.
+  // Valid cases w/ time zone argument.
   {
     const auto year = makeFlatVector<int32_t>({2021, 2021, 1});
     const auto month = makeFlatVector<int32_t>({07, 07, 1});
@@ -822,10 +822,10 @@ TEST_F(DateTimeFunctionsTest, makeTimestamp) {
     const auto minute = makeFlatVector<int32_t>({30, 30, 1});
     const auto micros =
         makeNullableFlatVector<int64_t>({45678000, 45678000, 1e6}, microsType);
-    const auto timezone =
+    const auto timeZone =
         makeNullableFlatVector<StringView>({"GMT", "CET", std::nullopt});
     auto data =
-        makeRowVector({year, month, day, hour, minute, micros, timezone});
+        makeRowVector({year, month, day, hour, minute, micros, timeZone});
     {
       setQueryTimeZone("");
       auto expected = makeNullableFlatVector<Timestamp>(
@@ -835,6 +835,8 @@ TEST_F(DateTimeFunctionsTest, makeTimestamp) {
       testMakeTimestamp(data, expected, true);
     }
     {
+      // Session time zone will be ignored if time zone is specified in
+      // argument.
       setQueryTimeZone("Asia/Shanghai");
       auto expected = makeNullableFlatVector<Timestamp>(
           {util::fromTimestampString("2021-07-11 06:30:45.678"),
@@ -846,11 +848,44 @@ TEST_F(DateTimeFunctionsTest, makeTimestamp) {
 
   // Invalid cases.
   {
-    const auto year = makeFlatVector<int32_t>(std::vector<int32_t>{1});
-    const auto month = makeFlatVector<int32_t>(std::vector<int32_t>{1});
-    const auto day = makeFlatVector<int32_t>(std::vector<int32_t>{1});
-    const auto hour = makeFlatVector<int32_t>(std::vector<int32_t>{1});
-    const auto minute = makeFlatVector<int32_t>(std::vector<int32_t>{1});
+    const auto year = makeFlatVector<int32_t>(
+        {facebook::velox::util::kMinYear - 1,
+         facebook::velox::util::kMaxYear + 1,
+         1,
+         1,
+         1,
+         1,
+         1,
+         1});
+    const auto month = makeFlatVector<int32_t>({1, 1, 0, 13, 1, 1, 1, 1});
+    const auto day = makeFlatVector<int32_t>({1, 1, 1, 1, 0, 32, 1, 1});
+    const auto hour = makeFlatVector<int32_t>({1, 1, 1, 1, 1, 1, 25, 1});
+    const auto minute = makeFlatVector<int32_t>({1, 1, 1, 1, 1, 1, 1, 61});
+    const auto micros =
+        makeFlatVector<int64_t>({1, 1, 1, 1, 1, 1, 1, 1}, microsType);
+    auto expected = makeNullableFlatVector<Timestamp>(
+        {std::nullopt,
+         std::nullopt,
+         std::nullopt,
+         std::nullopt,
+         std::nullopt,
+         std::nullopt,
+         std::nullopt,
+         std::nullopt});
+    auto data = makeRowVector({year, month, day, hour, minute, micros});
+    testMakeTimestamp(data, expected, false);
+
+    const auto testInvalidMicros = [&](std::optional<int64_t> microsec) {
+      auto result = evaluateOnce<Timestamp, int64_t>(
+          "make_timestamp(c0, c1, c2, c3, c4, c5)",
+          {1, 1, 1, 1, 1, microsec},
+          {INTEGER(), INTEGER(), INTEGER(), INTEGER(), INTEGER(), microsType});
+      EXPECT_EQ(result, std::nullopt);
+    };
+    testInvalidMicros(61e6);
+    testInvalidMicros(99999999);
+    testInvalidMicros(999999999);
+    testInvalidMicros(60007000);
 
     const auto testMicrosError = [&](int64_t microsec,
                                      const TypePtr& microsType,
@@ -862,22 +897,6 @@ TEST_F(DateTimeFunctionsTest, makeTimestamp) {
           evaluate("make_timestamp(c0, c1, c2, c3, c4, c5)", data),
           expectedError);
     };
-    testMicrosError(
-        61e6,
-        microsType,
-        "Invalid value for SecondOfMinute (valid values 0 - 59): 61.");
-    testMicrosError(
-        99999999,
-        microsType,
-        "Invalid value for SecondOfMinute (valid values 0 - 59): 99.");
-    testMicrosError(
-        999999999,
-        microsType,
-        "Invalid value for SecondOfMinute (valid values 0 - 59): 999.");
-    testMicrosError(
-        60007000,
-        microsType,
-        "The fraction of sec must be zero. Valid range is [0, 60].");
     testMicrosError(
         60007000,
         DECIMAL(20, 8),
