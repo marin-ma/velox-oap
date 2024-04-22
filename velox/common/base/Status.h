@@ -528,6 +528,23 @@ void Status::moveFrom(Status& s) {
     VELOX_RETURN_IF(!__s.ok(), __s);                          \
   } while (false)
 
+/// Return with given status wrapped in folly::Unexpected if condition is met.
+#define VELOX_RETURN_UNEXPECTED_IF(condition, status) \
+  do {                                                \
+    if (FOLLY_UNLIKELY(condition)) {                  \
+      return (::folly::makeUnexpected(status));       \
+    }                                                 \
+  } while (0)
+
+/// Propagate any non-successful Status wrapped in folly::Unexpected to the
+/// caller.
+#define VELOX_RETURN_UNEXPECTED(status)                       \
+  do {                                                        \
+    ::facebook::velox::Status __s =                           \
+        ::facebook::velox::internal::genericToStatus(status); \
+    VELOX_RETURN_IF(!__s.ok(), ::folly::makeUnexpected(__s)); \
+  } while (false)
+
 namespace internal {
 
 /// Common API for extracting Status from either Status or Result<T> (the latter
