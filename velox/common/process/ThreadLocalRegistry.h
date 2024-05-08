@@ -16,9 +16,12 @@
 
 #pragma once
 
+#include <boost/stacktrace.hpp>
+#include <iostream>
 #include <list>
 #include <memory>
 #include <mutex>
+#include <thread>
 
 namespace facebook::velox::process {
 
@@ -32,6 +35,14 @@ template <typename T>
 class ThreadLocalRegistry {
  public:
   class Reference;
+
+  ~ThreadLocalRegistry() {
+    std::cout << std::endl << boost::stacktrace::stacktrace() << std::endl;
+    std::cout << "~ThreadLocalRegistry called tid: "
+              << std::hash<std::thread::id>{}(std::this_thread::get_id())
+              << std::endl;
+    std::cout << "T: " << typeid(T).name() << std::endl;
+  }
 
   /// Access values from all threads.  Takes a global lock and should be used
   /// with caution.
@@ -63,13 +74,28 @@ class ThreadLocalRegistry<T>::Reference {
       : registry_(registry) {
     auto entry = std::make_unique<Entry>();
     std::lock_guard<std::mutex> lk(registry_->entriesMutex_);
+    std::cout << std::endl << boost::stacktrace::stacktrace() << std::endl;
+    std::cout << "Reference called tid: "
+              << std::hash<std::thread::id>{}(std::this_thread::get_id())
+              << std::endl;
+    std::cout << "registry_.size(): " << registry_->entries_.size()
+              << std::endl;
+    std::cout << "registry_: " << registry_.get() << std::endl;
+    std::cout << "T: " << typeid(T).name() << std::endl;
     iterator_ =
         registry_->entries_.insert(registry_->entries_.end(), std::move(entry));
   }
 
   ~Reference() {
+    std::cout << std::endl << boost::stacktrace::stacktrace() << std::endl;
     std::lock_guard<std::mutex> lk(registry_->entriesMutex_);
     registry_->entries_.erase(iterator_);
+    std::cout << "~Reference called tid: "
+              << std::hash<std::thread::id>{}(std::this_thread::get_id())
+              << std::endl;
+    std::cout << "registry_.size(): " << registry_->entries_.size()
+              << std::endl;
+    std::cout << "registry_: " << registry_.get() << std::endl;
   }
 
   /// Obtain the thread local value and process it with the functor `f'.
