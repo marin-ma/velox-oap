@@ -31,20 +31,16 @@ int main(int argc, char** argv) {
 
   ExpressionBenchmarkBuilder benchmarkBuilder;
 
-  std::vector<TypePtr> inputTypes = {
-      ARRAY(MAP(INTEGER(), VARCHAR())),
-      ROW({"f_map", "f_array"}, {MAP(INTEGER(), VARCHAR()), ARRAY(INTEGER())}),
-  };
+  std::vector<TypePtr> inputTypes = {BIGINT()};
 
   for (auto& inputType : inputTypes) {
     benchmarkBuilder
         .addBenchmarkSet(
             fmt::format("hash_{}", inputType->toString()),
-            ROW({"c0"}, {inputType}))
-        .withFuzzerOptions({.vectorSize = 1000, .nullRatio = 0.1})
-        .addExpression("hash", "hash(c0)")
-        .addExpression("xxhash64", "xxhash64(c0)")
-        .withIterations(100);
+            ROW({"c0", "c1"}, {inputType, inputType}))
+        .withFuzzerOptions({.vectorSize = 100000, .nullRatio = 0.1})
+        .addExpression("hash", "hash(c0,c1)")
+        .withIterations(20000);
   }
 
   benchmarkBuilder.registerBenchmarks();
