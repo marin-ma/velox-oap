@@ -281,26 +281,22 @@ void applyWithType(
   SeedType hashSeed = seed ? *seed : kDefaultSeed;
 
   auto& result = *resultRef->as<FlatVector<ReturnType>>();
-  rows.applyToSelected([&](auto row) { result.set(row, hashSeed); });
-
-  exec::LocalSelectivityVector selectedMinusNulls(context);
-
   exec::DecodedArgs decodedArgs(rows, args, context);
+
+  std::vector<std::shared_ptr<SparkVectorHasher<HashClass>>> hashers;
   for (auto i = hashIdx; i < args.size(); i++) {
     auto decoded = decodedArgs.at(i);
-    const SelectivityVector* selected = &rows;
-    if (args[i]->mayHaveNulls()) {
-      *selectedMinusNulls.get(rows.end()) = rows;
-      selectedMinusNulls->deselectNulls(
-          decoded->nulls(&rows), rows.begin(), rows.end());
-      selected = selectedMinusNulls.get();
-    }
-
     auto hasher = createVectorHasher<HashClass>(*decoded);
-    selected->applyToSelected([&](auto row) {
-      result.set(row, hasher->hashNotNullAt(row, result.valueAt(row)));
-    });
+    hashers.push_back(std::move(hasher));
   }
+
+  rows.applyToSelected([&](auto row) {
+    auto hash = hashSeed;
+    for (auto i = 0; i < args.size() - hashIdx; i++) {
+      hash = hashers[i]->hashAt(row, hash);
+    }
+    result.set(row, hash);
+  });
 }
 
 // Derived from
