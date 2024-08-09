@@ -15,6 +15,7 @@
  */
 #pragma once
 
+#include "velox/common/base/RawVector.h"
 #include "velox/vector/ComplexVector.h"
 #include "velox/vector/DecodedVector.h"
 
@@ -35,6 +36,18 @@ class CompactRow {
   /// Serializes row at specified index into 'buffer'.
   /// 'buffer' must have sufficient capacity and set to all zeros.
   int32_t serialize(vector_size_t index, char* buffer);
+
+  /// Serializes rows in range [offset, offset + size) into 'buffer' at given
+  /// 'bufferOffsets'. 'buffer' must have sufficient capacity and set to all
+  /// zeros. 'bufferOffsets' must be pre-filled with the write offsets for each
+  /// row and must have the same number of elements as the 'size' parameter.
+  /// The caller must ensure that the space between each offset in
+  /// 'bufferOffsets' is no less than the 'fixedRowSize' or 'rowSize'.
+  void serialize(
+      vector_size_t offset,
+      vector_size_t size,
+      char* buffer,
+      const std::vector<size_t>& bufferOffsets);
 
   /// Deserializes multiple rows into a RowVector of specified type. The type
   /// must match the contents of the serialized rows.
@@ -107,6 +120,14 @@ class CompactRow {
 
   /// Serializes struct value to buffer. Value must not be null.
   int32_t serializeRow(vector_size_t index, char* buffer);
+
+  /// Serializes struct values in range [offset, offset + size) to buffer.
+  /// Value must not be null.
+  void serializeRow(
+      vector_size_t offset,
+      vector_size_t size,
+      char* buffer,
+      const std::vector<size_t>& bufferOffsets);
 
   const TypeKind typeKind_;
   DecodedVector decoded_;

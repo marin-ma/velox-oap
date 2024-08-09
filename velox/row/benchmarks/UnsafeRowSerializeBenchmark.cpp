@@ -65,6 +65,24 @@ class SerializeBenchmark {
     VELOX_CHECK_EQ(serialized.size(), data->size());
   }
 
+  void serializeCompactRange(const RowTypePtr& rowType) {
+    folly::BenchmarkSuspender suspender;
+    auto data = makeData(rowType);
+    suspender.dismiss();
+
+    auto numRows = data->size();
+    std::vector<size_t> rowSize(numRows);
+    std::vector<size_t> offsets(numRows);
+
+    CompactRow compact(data);
+    auto totalSize =
+        computeTotalSize(compact, rowType, numRows, rowSize, offsets);
+    auto buffer = AlignedBuffer::allocate<char>(totalSize, pool(), 0);
+    auto serialized =
+        serialize(compact, data->size(), buffer, rowSize, offsets);
+    VELOX_CHECK_EQ(serialized.size(), data->size());
+  }
+
   void deserializeCompact(const RowTypePtr& rowType) {
     folly::BenchmarkSuspender suspender;
     auto data = makeData(rowType);
@@ -184,6 +202,46 @@ class SerializeBenchmark {
     return serialized;
   }
 
+  size_t computeTotalSize(
+      CompactRow& compactRow,
+      const RowTypePtr& rowType,
+      vector_size_t numRows,
+      std::vector<size_t>& rowSize,
+      std::vector<size_t>& offsets) {
+    size_t totalSize = 0;
+    if (auto fixedRowSize = CompactRow::fixedRowSize(rowType)) {
+      totalSize = fixedRowSize.value() * numRows;
+      for (auto i = 0; i < numRows; ++i) {
+        rowSize[i] = fixedRowSize.value();
+        offsets[i] = fixedRowSize.value() * i;
+      }
+    } else {
+      for (auto i = 0; i < numRows; ++i) {
+        rowSize[i] = compactRow.rowSize(i);
+        offsets[i] = totalSize;
+        totalSize += rowSize[i];
+      }
+    }
+    return totalSize;
+  }
+
+  std::vector<std::string_view> serialize(
+      CompactRow& compactRow,
+      vector_size_t numRows,
+      BufferPtr& buffer,
+      std::vector<size_t>& rowSize,
+      std::vector<size_t>& offsets) {
+    auto rawBuffer = buffer->asMutable<char>();
+    compactRow.serialize(0, numRows, rawBuffer, offsets);
+
+    std::vector<std::string_view> serialized;
+    for (auto i = 0; i < numRows; ++i) {
+      serialized.push_back(
+          std::string_view(rawBuffer + offsets[i], rowSize[i]));
+    }
+    return serialized;
+  }
+
   HashStringAllocator::Position serialize(
       const RowVectorPtr& data,
       HashStringAllocator& allocator) {
@@ -205,35 +263,40 @@ class SerializeBenchmark {
       memory::memoryManager()->addLeafPool()};
 };
 
-#define SERDE_BENCHMARKS(name, rowType)      \
-  BENCHMARK(unsafe_serialize_##name) {       \
-    SerializeBenchmark benchmark;            \
-    benchmark.serializeUnsafe(rowType);      \
-  }                                          \
-                                             \
-  BENCHMARK(compact_serialize_##name) {      \
-    SerializeBenchmark benchmark;            \
-    benchmark.serializeCompact(rowType);     \
-  }                                          \
-                                             \
-  BENCHMARK(container_serialize_##name) {    \
-    SerializeBenchmark benchmark;            \
-    benchmark.serializeContainer(rowType);   \
-  }                                          \
-                                             \
-  BENCHMARK(unsafe_deserialize_##name) {     \
-    SerializeBenchmark benchmark;            \
-    benchmark.deserializeUnsafe(rowType);    \
-  }                                          \
-                                             \
-  BENCHMARK(compact_deserialize_##name) {    \
-    SerializeBenchmark benchmark;            \
-    benchmark.deserializeCompact(rowType);   \
-  }                                          \
-                                             \
-  BENCHMARK(container_deserialize_##name) {  \
-    SerializeBenchmark benchmark;            \
-    benchmark.deserializeContainer(rowType); \
+#define SERDE_BENCHMARKS(name, rowType)       \
+  BENCHMARK(unsafe_serialize_##name) {        \
+    SerializeBenchmark benchmark;             \
+    benchmark.serializeUnsafe(rowType);       \
+  }                                           \
+                                              \
+  BENCHMARK(compact_serialize_##name) {       \
+    SerializeBenchmark benchmark;             \
+    benchmark.serializeCompact(rowType);      \
+  }                                           \
+                                              \
+  BENCHMARK(compact_serialize_range_##name) { \
+    SerializeBenchmark benchmark;             \
+    benchmark.serializeCompactRange(rowType); \
+  }                                           \
+                                              \
+  BENCHMARK(container_serialize_##name) {     \
+    SerializeBenchmark benchmark;             \
+    benchmark.serializeContainer(rowType);    \
+  }                                           \
+                                              \
+  BENCHMARK(unsafe_deserialize_##name) {      \
+    SerializeBenchmark benchmark;             \
+    benchmark.deserializeUnsafe(rowType);     \
+  }                                           \
+                                              \
+  BENCHMARK(compact_deserialize_##name) {     \
+    SerializeBenchmark benchmark;             \
+    benchmark.deserializeCompact(rowType);    \
+  }                                           \
+                                              \
+  BENCHMARK(container_deserialize_##name) {   \
+    SerializeBenchmark benchmark;             \
+    benchmark.deserializeContainer(rowType);  \
   }
 
 SERDE_BENCHMARKS(
