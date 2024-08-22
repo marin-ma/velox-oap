@@ -129,6 +129,13 @@ class CompactRow {
       char* buffer,
       const std::vector<size_t>& bufferOffsets);
 
+  /// Serialize children for ROW type at rows.
+  void serializeChildren(
+      const raw_vector<vector_size_t>& rows,
+      const raw_vector<uint8_t*>& nulls,
+      char* buffer,
+      std::vector<size_t>& offsets);
+
   const TypeKind typeKind_;
   DecodedVector decoded_;
 

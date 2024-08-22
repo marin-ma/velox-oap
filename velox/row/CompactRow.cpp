@@ -290,39 +290,17 @@ int32_t CompactRow::rowRowSize(vector_size_t index) {
 }
 
 int32_t CompactRow::serializeRow(vector_size_t index, char* buffer) {
-  auto childIndex = decoded_.index(index);
+  raw_vector<vector_size_t> rows(1);
+  raw_vector<uint8_t*> nulls(1);
+  std::vector<size_t> offsets(1);
 
-  int64_t valuesOffset = rowNullBytes_;
+  rows[0] = decoded_.index(index);
+  nulls[0] = reinterpret_cast<uint8_t*>(buffer);
+  offsets[0] = rowNullBytes_;
 
-  auto* nulls = reinterpret_cast<uint8_t*>(buffer);
+  serializeChildren(rows, nulls, buffer, offsets);
 
-  for (auto i = 0; i < children_.size(); ++i) {
-    auto& child = children_[i];
-
-    // Write null bit. Advance offset if 'fixed-width'.
-    if (child.isNullAt(childIndex)) {
-      bits::setBit(nulls, i, true);
-      if (childIsFixedWidth_[i]) {
-        valuesOffset += child.valueBytes_;
-      }
-      continue;
-    }
-
-    if (childIsFixedWidth_[i]) {
-      // Write fixed-width value.
-      if (child.valueBytes_ > 0) {
-        child.serializeFixedWidth(childIndex, buffer + valuesOffset);
-      }
-      valuesOffset += child.valueBytes_;
-    } else {
-      // Write non-null variable-width value.
-      auto size =
-          child.serializeVariableWidth(childIndex, buffer + valuesOffset);
-      valuesOffset += size;
-    }
-  }
-
-  return valuesOffset;
+  return offsets[0];
 }
 
 void CompactRow::serializeRow(
@@ -350,6 +328,14 @@ void CompactRow::serializeRow(
     offsets[i] += rowNullBytes_;
   }
 
+  serializeChildren(rows, nulls, buffer, offsets);
+}
+
+void CompactRow::serializeChildren(
+    const raw_vector<vector_size_t>& rows,
+    const raw_vector<uint8_t*>& nulls,
+    char* buffer,
+    std::vector<size_t>& offsets) {
   for (auto childIdx = 0; childIdx < children_.size(); ++childIdx) {
     auto& child = children_[childIdx];
     if (childIsFixedWidth_[childIdx] ||
