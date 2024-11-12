@@ -374,11 +374,13 @@ TEST_P(CodecTest, specifyCompressionLevel) {
             "' not implemented.");
     return;
   }
-  auto compressionLevels = {
-      Codec::defaultCompressionLevel(kind).thenOrThrow(folly::identity),
-      Codec::minimumCompressionLevel(kind).thenOrThrow(folly::identity),
-      Codec::maximumCompressionLevel(kind).thenOrThrow(folly::identity)};
-  for (auto& compressionLevel : compressionLevels) {
+  auto codecDefault = Codec::create(kind).thenOrThrow(folly::identity);
+  checkCodecRoundtrip(codecDefault, data);
+
+  for (const auto& compressionLevel :
+       {codecDefault->defaultCompressionLevel(),
+        codecDefault->minimumCompressionLevel(),
+        codecDefault->maximumCompressionLevel()}) {
     auto codec =
         Codec::create(kind, compressionLevel).thenOrThrow(folly::identity);
     checkCodecRoundtrip(codec, data);

@@ -121,24 +121,6 @@ bool Codec::supportsCompressFixedLength(CompressionKind kind) {
   return false;
 }
 
-folly::Expected<int32_t, Status> Codec::maximumCompressionLevel(
-    CompressionKind kind) {
-  return Codec::create(kind).then(
-      [](auto&& codec) { return codec->maximumCompressionLevel(); });
-}
-
-folly::Expected<int32_t, Status> Codec::minimumCompressionLevel(
-    CompressionKind kind) {
-  return Codec::create(kind).then(
-      [](auto&& codec) { return codec->minimumCompressionLevel(); });
-}
-
-folly::Expected<int32_t, Status> Codec::defaultCompressionLevel(
-    CompressionKind kind) {
-  return Codec::create(kind).then(
-      [](auto&& codec) { return codec->defaultCompressionLevel(); });
-}
-
 folly::Expected<std::unique_ptr<Codec>, Status> Codec::create(
     CompressionKind kind,
     const CodecOptions& codecOptions) {

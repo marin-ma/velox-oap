@@ -25,6 +25,29 @@
 
 namespace facebook::velox::common {
 
+/// Return with given status wrapped in folly::Unexpected if condition is met.
+#define VELOX_RETURN_UNEXPECTED_IF(condition, status) \
+  do {                                                \
+    if (FOLLY_UNLIKELY(condition)) {                  \
+      return (::folly::makeUnexpected(status));       \
+    }                                                 \
+  } while (false)
+
+/// Propagate any non-successful Status wrapped in folly::Unexpected to the
+/// caller.
+#define VELOX_RETURN_UNEXPECTED_NOT_OK(status)                \
+  do {                                                        \
+    ::facebook::velox::Status __s =                           \
+        ::facebook::velox::internal::genericToStatus(status); \
+    VELOX_RETURN_IF(!__s.ok(), ::folly::makeUnexpected(__s)); \
+  } while (false)
+
+#define VELOX_RETURN_UNEXPECTED(expected)                    \
+  do {                                                       \
+    auto res = (expected);                                   \
+    VELOX_RETURN_UNEXPECTED_IF(res.hasError(), res.error()); \
+  } while (false)
+
 enum CompressionKind {
   CompressionKind_NONE = 0,
   CompressionKind_ZLIB = 1,
@@ -157,21 +180,6 @@ class Codec {
 
   // Return true if indicated kind supports creating streaming de/compressor.
   static bool supportsStreamingCompression(CompressionKind kind);
-
-  /// Return the smallest supported compression level for the kind.
-  /// Note: This function creates a temporary Codec instance.
-  static folly::Expected<int32_t, Status> minimumCompressionLevel(
-      CompressionKind kind);
-
-  /// Return the largest supported compression level for the kind
-  /// Note: This function creates a temporary Codec instance.
-  static folly::Expected<int32_t, Status> maximumCompressionLevel(
-      CompressionKind kind);
-
-  /// Return the default compression level.
-  /// Note: This function creates a temporary Codec instance.
-  static folly::Expected<int32_t, Status> defaultCompressionLevel(
-      CompressionKind kind);
 
   /// Return the smallest supported compression level.
   /// If the codec doesn't support compression level,
