@@ -17,8 +17,11 @@ if(${VELOX_BUILD_TESTING})
 endif()
 
 velox_add_library(
-  velox_common_compression Compression.cpp LzoDecompressor.cpp
-                           Lz4Compression.cpp HadoopCompressionFormat.cpp)
+  velox_common_compression
+  Compression.cpp
+  LzoDecompressor.cpp
+  Lz4Compression.cpp
+  HadoopCompressionFormat.cpp)
 velox_link_libraries(
   velox_common_compression
   PUBLIC velox_status Folly::folly lz4::lz4
