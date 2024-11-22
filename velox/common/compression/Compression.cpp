@@ -16,7 +16,9 @@
 
 #include "velox/common/compression/Compression.h"
 #include "velox/common/base/Exceptions.h"
+#ifdef VELOX_ENABLE_COMPRESSION_LZ4
 #include "velox/common/compression/Lz4Compression.h"
+#endif
 
 #include <folly/Conv.h>
 
@@ -109,8 +111,10 @@ bool Codec::supportsGetUncompressedLength(CompressionKind kind) {
 
 bool Codec::supportsStreamingCompression(CompressionKind kind) {
   switch (kind) {
+#ifdef VELOX_ENABLE_COMPRESSION_LZ4
     case CompressionKind::CompressionKind_LZ4:
       return true;
+#endif
     default:
       return false;
   }
@@ -121,7 +125,7 @@ bool Codec::supportsCompressFixedLength(CompressionKind kind) {
   return false;
 }
 
-folly::Expected<std::unique_ptr<Codec>, Status> Codec::create(
+Expected<std::unique_ptr<Codec>> Codec::create(
     CompressionKind kind,
     const CodecOptions& codecOptions) {
   if (!isAvailable(kind)) {
@@ -137,6 +141,7 @@ folly::Expected<std::unique_ptr<Codec>, Status> Codec::create(
   auto compressionLevel = codecOptions.compressionLevel;
   std::unique_ptr<Codec> codec;
   switch (kind) {
+#ifdef VELOX_ENABLE_COMPRESSION_LZ4
     case CompressionKind::CompressionKind_LZ4:
       if (auto options = dynamic_cast<const Lz4CodecOptions*>(&codecOptions)) {
         switch (options->type) {
@@ -154,6 +159,7 @@ folly::Expected<std::unique_ptr<Codec>, Status> Codec::create(
       // By default, create LZ4 Frame codec.
       codec = makeLz4FrameCodec(compressionLevel);
       break;
+#endif
     default:
       break;
   }
@@ -169,7 +175,7 @@ folly::Expected<std::unique_ptr<Codec>, Status> Codec::create(
   return codec;
 }
 
-folly::Expected<std::unique_ptr<Codec>, Status> Codec::create(
+Expected<std::unique_ptr<Codec>> Codec::create(
     CompressionKind kind,
     int32_t compressionLevel) {
   return create(kind, CodecOptions{compressionLevel});
@@ -178,13 +184,11 @@ folly::Expected<std::unique_ptr<Codec>, Status> Codec::create(
 bool Codec::isAvailable(CompressionKind kind) {
   switch (kind) {
     case CompressionKind::CompressionKind_NONE:
+      return true;
+#ifdef VELOX_ENABLE_COMPRESSION_LZ4
     case CompressionKind::CompressionKind_LZ4:
       return true;
-    case CompressionKind::CompressionKind_SNAPPY:
-    case CompressionKind::CompressionKind_GZIP:
-    case CompressionKind::CompressionKind_ZLIB:
-    case CompressionKind::CompressionKind_ZSTD:
-    case CompressionKind::CompressionKind_LZO:
+#endif
     default:
       return false;
   }
@@ -196,7 +200,7 @@ std::optional<uint64_t> Codec::getUncompressedLength(
   return std::nullopt;
 }
 
-folly::Expected<uint64_t, Status> Codec::compressFixedLength(
+Expected<uint64_t> Codec::compressFixedLength(
     const uint8_t* input,
     uint64_t inputLength,
     uint8_t* output,
@@ -205,13 +209,13 @@ folly::Expected<uint64_t, Status> Codec::compressFixedLength(
       Status::Invalid("'{}' doesn't support fixed-length compression", name()));
 }
 
-folly::Expected<std::shared_ptr<StreamingCompressor>, Status>
+Expected<std::shared_ptr<StreamingCompressor>>
 Codec::makeStreamingCompressor() {
   return folly::makeUnexpected(Status::Invalid(
       "Streaming compression is unsupported with {} format.", name()));
 }
 
-folly::Expected<std::shared_ptr<StreamingDecompressor>, Status>
+Expected<std::shared_ptr<StreamingDecompressor>>
 Codec::makeStreamingDecompressor() {
   return folly::makeUnexpected(Status::Invalid(
       "Streaming decompression is unsupported with {} format.", name()));

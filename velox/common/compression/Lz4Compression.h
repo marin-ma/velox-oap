@@ -60,23 +60,23 @@ class Lz4FrameCodec : public Lz4CodecBase {
 
   uint64_t maxCompressedLength(uint64_t inputLength) override;
 
-  folly::Expected<uint64_t, Status> compress(
+  Expected<uint64_t> compress(
       const uint8_t* input,
       uint64_t inputLength,
       uint8_t* output,
       uint64_t outputLength) override;
 
-  folly::Expected<uint64_t, Status> decompress(
+  Expected<uint64_t> decompress(
       const uint8_t* input,
       uint64_t inputLength,
       uint8_t* output,
       uint64_t outputLength) override;
 
-  folly::Expected<std::shared_ptr<StreamingCompressor>, Status>
-  makeStreamingCompressor() override;
+  Expected<std::shared_ptr<StreamingCompressor>> makeStreamingCompressor()
+      override;
 
-  folly::Expected<std::shared_ptr<StreamingDecompressor>, Status>
-  makeStreamingDecompressor() override;
+  Expected<std::shared_ptr<StreamingDecompressor>> makeStreamingDecompressor()
+      override;
 
  protected:
   const LZ4F_preferences_t prefs_;
@@ -88,32 +88,34 @@ class Lz4RawCodec : public Lz4CodecBase {
 
   uint64_t maxCompressedLength(uint64_t inputLength) override;
 
-  folly::Expected<uint64_t, Status> compress(
+  Expected<uint64_t> compress(
       const uint8_t* input,
       uint64_t inputLength,
       uint8_t* output,
       uint64_t outputLength) override;
 
-  folly::Expected<uint64_t, Status> decompress(
+  Expected<uint64_t> decompress(
       const uint8_t* input,
       uint64_t inputLength,
       uint8_t* output,
       uint64_t outputLength) override;
 };
 
+/// The Hadoop Lz4Codec source code can be found here:
+/// https://github.com/apache/hadoop/blob/trunk/hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-nativetask/src/main/native/src/codec/Lz4Codec.cc
 class Lz4HadoopCodec : public Lz4RawCodec, public HadoopCompressionFormat {
  public:
   Lz4HadoopCodec();
 
   uint64_t maxCompressedLength(uint64_t inputLength) override;
 
-  folly::Expected<uint64_t, Status> compress(
+  Expected<uint64_t> compress(
       const uint8_t* input,
       uint64_t inputLength,
       uint8_t* output,
       uint64_t outputLength) override;
 
-  folly::Expected<uint64_t, Status> decompress(
+  Expected<uint64_t> decompress(
       const uint8_t* input,
       uint64_t inputLength,
       uint8_t* output,
@@ -126,7 +128,7 @@ class Lz4HadoopCodec : public Lz4RawCodec, public HadoopCompressionFormat {
   int32_t defaultCompressionLevel() const override;
 
  private:
-  folly::Expected<uint64_t, Status> decompressInternal(
+  Expected<uint64_t> decompressInternal(
       const uint8_t* input,
       uint64_t inputLength,
       uint8_t* output,

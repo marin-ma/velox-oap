@@ -54,18 +54,15 @@ class LZ4Compressor : public StreamingCompressor {
 
   Status init();
 
-  folly::Expected<CompressResult, Status> compress(
+  Expected<CompressResult> compress(
       const uint8_t* input,
       uint64_t inputLength,
       uint8_t* output,
       uint64_t outputLength) override;
 
-  folly::Expected<FlushResult, Status> flush(
-      uint8_t* output,
-      uint64_t outputLength) override;
+  Expected<FlushResult> flush(uint8_t* output, uint64_t outputLength) override;
 
-  folly::Expected<EndResult, Status> end(uint8_t* output, uint64_t outputLength)
-      override;
+  Expected<EndResult> end(uint8_t* output, uint64_t outputLength) override;
 
  protected:
   Status
@@ -87,7 +84,7 @@ class LZ4Decompressor : public StreamingDecompressor {
     }
   }
 
-  folly::Expected<DecompressResult, Status> decompress(
+  Expected<DecompressResult> decompress(
       const uint8_t* input,
       uint64_t inputLength,
       uint8_t* output,
@@ -123,8 +120,7 @@ Status LZ4Compressor::init() {
   return Status::OK();
 }
 
-folly::Expected<StreamingCompressor::CompressResult, Status>
-LZ4Compressor::compress(
+Expected<StreamingCompressor::CompressResult> LZ4Compressor::compress(
     const uint8_t* input,
     uint64_t inputLength,
     uint8_t* output,
@@ -157,7 +153,7 @@ LZ4Compressor::compress(
   return CompressResult{inputLength, bytesWritten, false};
 }
 
-folly::Expected<StreamingCompressor::FlushResult, Status> LZ4Compressor::flush(
+Expected<StreamingCompressor::FlushResult> LZ4Compressor::flush(
     uint8_t* output,
     uint64_t outputLength) {
   auto outputSize = static_cast<size_t>(outputLength);
@@ -188,7 +184,7 @@ folly::Expected<StreamingCompressor::FlushResult, Status> LZ4Compressor::flush(
   return FlushResult{bytesWritten, false};
 }
 
-folly::Expected<StreamingCompressor::EndResult, Status> LZ4Compressor::end(
+Expected<StreamingCompressor::EndResult> LZ4Compressor::end(
     uint8_t* output,
     uint64_t outputLength) {
   auto outputSize = static_cast<size_t>(outputLength);
@@ -258,8 +254,7 @@ Status LZ4Decompressor::reset() {
 #endif
 }
 
-folly::Expected<StreamingDecompressor::DecompressResult, Status>
-LZ4Decompressor::decompress(
+Expected<StreamingDecompressor::DecompressResult> LZ4Decompressor::decompress(
     const uint8_t* input,
     uint64_t inputLength,
     uint8_t* output,
@@ -321,7 +316,7 @@ uint64_t Lz4FrameCodec::maxCompressedLength(uint64_t inputLen) {
       LZ4F_compressFrameBound(static_cast<size_t>(inputLen), &prefs_));
 }
 
-folly::Expected<uint64_t, Status> Lz4FrameCodec::compress(
+Expected<uint64_t> Lz4FrameCodec::compress(
     const uint8_t* input,
     uint64_t inputLength,
     uint8_t* output,
@@ -337,13 +332,13 @@ folly::Expected<uint64_t, Status> Lz4FrameCodec::compress(
   return static_cast<uint64_t>(ret);
 }
 
-folly::Expected<uint64_t, Status> Lz4FrameCodec::decompress(
+Expected<uint64_t> Lz4FrameCodec::decompress(
     const uint8_t* input,
     uint64_t inputLength,
     uint8_t* output,
     uint64_t outputLength) {
   return makeStreamingDecompressor().then(
-      [&](const auto& decompressor) -> folly::Expected<uint64_t, Status> {
+      [&](const auto& decompressor) -> Expected<uint64_t> {
         uint64_t bytesWritten = 0;
         while (!decompressor->isFinished() && inputLength != 0) {
           auto maybeResult = decompressor->decompress(
@@ -368,14 +363,14 @@ folly::Expected<uint64_t, Status> Lz4FrameCodec::decompress(
       });
 }
 
-folly::Expected<std::shared_ptr<StreamingCompressor>, Status>
+Expected<std::shared_ptr<StreamingCompressor>>
 Lz4FrameCodec::makeStreamingCompressor() {
   auto ptr = std::make_shared<LZ4Compressor>(compressionLevel_);
   VELOX_RETURN_UNEXPECTED_NOT_OK(ptr->init());
   return ptr;
 }
 
-folly::Expected<std::shared_ptr<StreamingDecompressor>, Status>
+Expected<std::shared_ptr<StreamingDecompressor>>
 Lz4FrameCodec::makeStreamingDecompressor() {
   auto ptr = std::make_shared<LZ4Decompressor>();
   VELOX_RETURN_UNEXPECTED_NOT_OK(ptr->init());
@@ -390,7 +385,7 @@ uint64_t Lz4RawCodec::maxCompressedLength(uint64_t inputLength) {
       LZ4_compressBound(static_cast<int>(inputLength)));
 }
 
-folly::Expected<uint64_t, Status> Lz4RawCodec::compress(
+Expected<uint64_t> Lz4RawCodec::compress(
     const uint8_t* input,
     uint64_t inputLength,
     uint8_t* output,
@@ -420,7 +415,7 @@ folly::Expected<uint64_t, Status> Lz4RawCodec::compress(
   return static_cast<uint64_t>(compressedSize);
 }
 
-folly::Expected<uint64_t, Status> Lz4RawCodec::decompress(
+Expected<uint64_t> Lz4RawCodec::decompress(
     const uint8_t* input,
     uint64_t inputLength,
     uint8_t* output,
@@ -441,7 +436,7 @@ uint64_t Lz4HadoopCodec::maxCompressedLength(uint64_t inputLength) {
   return kPrefixLength + Lz4RawCodec::maxCompressedLength(inputLength);
 }
 
-folly::Expected<uint64_t, Status> Lz4HadoopCodec::compress(
+Expected<uint64_t> Lz4HadoopCodec::compress(
     const uint8_t* input,
     uint64_t inputLength,
     uint8_t* output,
@@ -469,7 +464,7 @@ folly::Expected<uint64_t, Status> Lz4HadoopCodec::compress(
       });
 }
 
-folly::Expected<uint64_t, Status> Lz4HadoopCodec::decompress(
+Expected<uint64_t> Lz4HadoopCodec::decompress(
     const uint8_t* input,
     uint64_t inputLength,
     uint8_t* output,
@@ -496,7 +491,7 @@ int32_t Lz4HadoopCodec::defaultCompressionLevel() const {
   return kUseDefaultCompressionLevel;
 }
 
-folly::Expected<uint64_t, Status> Lz4HadoopCodec::decompressInternal(
+Expected<uint64_t> Lz4HadoopCodec::decompressInternal(
     const uint8_t* input,
     uint64_t inputLength,
     uint8_t* output,

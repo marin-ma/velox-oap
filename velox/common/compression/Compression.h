@@ -96,7 +96,7 @@ class StreamingCompressor {
   /// Compress some input.
   /// If CompressResult.outputTooSmall is true on return, then a larger output
   /// buffer should be supplied.
-  virtual folly::Expected<CompressResult, Status> compress(
+  virtual Expected<CompressResult> compress(
       const uint8_t* input,
       uint64_t inputLength,
       uint8_t* output,
@@ -105,7 +105,7 @@ class StreamingCompressor {
   /// Flush part of the compressed output.
   /// If FlushResult.outputTooSmall is true on return, flush() should be called
   /// again with a larger buffer.
-  virtual folly::Expected<FlushResult, Status> flush(
+  virtual Expected<FlushResult> flush(
       uint8_t* output,
       uint64_t outputLength) = 0;
 
@@ -113,7 +113,7 @@ class StreamingCompressor {
   /// If EndResult.outputTooSmall is true on return, end() should be called
   /// again with a larger buffer. Otherwise, the StreamingCompressor should not
   /// be used anymore. end() will flush the compressed output.
-  virtual folly::Expected<EndResult, Status> end(
+  virtual Expected<EndResult> end(
       uint8_t* output,
       uint64_t outputLength) = 0;
 };
@@ -131,7 +131,7 @@ class StreamingDecompressor {
   /// Decompress some input.
   /// If outputTooSmall is true on return, a larger output buffer needs
   /// to be supplied.
-  virtual folly::Expected<DecompressResult, Status> decompress(
+  virtual Expected<DecompressResult> decompress(
       const uint8_t* input,
       uint64_t inputLength,
       uint8_t* output,
@@ -158,12 +158,12 @@ class Codec {
   virtual ~Codec() = default;
 
   // Create a kind for the given compression algorithm with CodecOptions.
-  static folly::Expected<std::unique_ptr<Codec>, Status> create(
+  static Expected<std::unique_ptr<Codec>> create(
       CompressionKind kind,
       const CodecOptions& codecOptions = CodecOptions{});
 
   // Create a kind for the given compression algorithm.
-  static folly::Expected<std::unique_ptr<Codec>, Status> create(
+  static Expected<std::unique_ptr<Codec>> create(
       CompressionKind kind,
       int32_t compressionLevel);
 
@@ -202,7 +202,7 @@ class Codec {
   /// Note: One-shot compression is not always compatible with streaming
   /// decompression. Depending on the codec (e.g. LZ4), different formats may
   /// be used.
-  virtual folly::Expected<uint64_t, Status> compress(
+  virtual Expected<uint64_t> compress(
       const uint8_t* input,
       uint64_t inputLength,
       uint8_t* output,
@@ -214,7 +214,7 @@ class Codec {
   /// Note: One-shot decompression is not always compatible with streaming
   /// compression. Depending on the codec (e.g. LZ4), different formats may
   /// be used.
-  virtual folly::Expected<uint64_t, Status> decompress(
+  virtual Expected<uint64_t> decompress(
       const uint8_t* input,
       uint64_t inputLength,
       uint8_t* output,
@@ -229,7 +229,7 @@ class Codec {
   /// function. This is useful when fixed-length compression blocks are required
   /// by the caller.
   /// Note: Only Gzip and Zstd codec supports this function.
-  virtual folly::Expected<uint64_t, Status> compressFixedLength(
+  virtual Expected<uint64_t> compressFixedLength(
       const uint8_t* input,
       uint64_t inputLength,
       uint8_t* output,
@@ -247,11 +247,11 @@ class Codec {
       const uint8_t* input) const;
 
   // Create a streaming compressor instance.
-  virtual folly::Expected<std::shared_ptr<StreamingCompressor>, Status>
+  virtual Expected<std::shared_ptr<StreamingCompressor>>
   makeStreamingCompressor();
 
   // Create a streaming compressor instance.
-  virtual folly::Expected<std::shared_ptr<StreamingDecompressor>, Status>
+  virtual Expected<std::shared_ptr<StreamingDecompressor>>
   makeStreamingDecompressor();
 
   // This Codec's compression type.

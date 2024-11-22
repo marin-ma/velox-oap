@@ -27,16 +27,6 @@ bool HadoopCompressionFormat::tryDecompressHadoop(
     uint8_t* output,
     uint64_t outputLength,
     uint64_t& actualDecompressedSize) {
-  // Parquet files written with the Hadoop Lz4RawCodec use their own framing.
-  // The input buffer can contain an arbitrary number of "frames", each
-  // with the following structure:
-  // - bytes 0..3: big-endian uint32_t representing the frame decompressed
-  // size
-  // - bytes 4..7: big-endian uint32_t representing the frame compressed size
-  // - bytes 8...: frame compressed data
-  //
-  // The Hadoop Lz4Codec source code can be found here:
-  // https://github.com/apache/hadoop/blob/trunk/hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-nativetask/src/main/native/src/codec/Lz4Codec.cc
   uint64_t totalDecompressedSize = 0;
 
   while (inputLength >= kPrefixLength) {

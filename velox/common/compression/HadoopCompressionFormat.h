@@ -22,8 +22,18 @@
 
 namespace facebook::velox::common {
 
+/// Parquet files written with the Hadoop compression codecs use their own
+/// framing.
+/// The input buffer can contain an arbitrary number of "frames", each
+/// with the following structure:
+/// - bytes 0..3: big-endian uint32_t representing the frame decompressed
+/// size
+/// - bytes 4..7: big-endian uint32_t representing the frame compressed size
+/// - bytes 8...: frame compressed data
 class HadoopCompressionFormat {
  protected:
+  /// Try to decompress input data in Hadoop's compression format.
+  /// Returns true if decompression is successful, false otherwise.
   bool tryDecompressHadoop(
       const uint8_t* input,
       uint64_t inputLength,
@@ -31,7 +41,10 @@ class HadoopCompressionFormat {
       uint64_t outputLength,
       uint64_t& actualDecompressedSize);
 
-  virtual folly::Expected<uint64_t, Status> decompressInternal(
+  /// Called by tryDecompressHadoop to decompress a single frame and
+  /// should be implemented based on the specific compression format.
+  /// E.g. Lz4HadoopCodec uses Lz4RawCodec::decompress to decompress a frame.
+  virtual Expected<uint64_t> decompressInternal(
       const uint8_t* input,
       uint64_t inputLength,
       uint8_t* output,
