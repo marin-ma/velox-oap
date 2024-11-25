@@ -90,9 +90,7 @@ class StreamingCompressor {
   /// If EndResult.outputTooSmall is true on return, end() should be called
   /// again with a larger buffer. Otherwise, the StreamingCompressor should not
   /// be used anymore. end() will flush the compressed output.
-  virtual Expected<EndResult> end(
-      uint8_t* output,
-      uint64_t outputLength) = 0;
+  virtual Expected<EndResult> end(uint8_t* output, uint64_t outputLength) = 0;
 };
 
 class StreamingDecompressor {
