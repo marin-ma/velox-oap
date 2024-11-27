@@ -371,7 +371,7 @@ TEST_P(CodecTest, specifyCompressionLevel) {
     VELOX_ASSERT_THROW(
         Codec::create(kind, kUseDefaultCompressionLevel),
         "Support for codec '" + compressionKindToString(kind) +
-            "' not implemented.");
+            "' is either not built or not implemented.");
     return;
   }
   auto codecDefault = Codec::create(kind).thenOrThrow(folly::identity);

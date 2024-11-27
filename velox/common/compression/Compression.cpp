@@ -134,8 +134,9 @@ Expected<std::unique_ptr<Codec>> Codec::create(
       return folly::makeUnexpected(
           Status::Invalid("Unrecognized codec '{}'", name));
     }
-    return folly::makeUnexpected(
-        Status::Invalid("Support for codec '{}' not implemented.", name));
+    return folly::makeUnexpected(Status::Invalid(
+        "Support for codec '{}' is either not built or not implemented.",
+        name));
   }
 
   auto compressionLevel = codecOptions.compressionLevel;
@@ -166,7 +167,7 @@ Expected<std::unique_ptr<Codec>> Codec::create(
 
   if (codec == nullptr) {
     return folly::makeUnexpected(Status::Invalid(
-        "Support for codec '{}' not implemented.",
+        "Support for codec '{}' is either not built or not implemented.",
         compressionKindToString(kind)));
   }
 
