@@ -16,17 +16,21 @@ if(${VELOX_BUILD_TESTING})
   add_subdirectory(tests)
 endif()
 
-set(VELOX_COMMON_COMPRESSION_SRCS Compression.cpp LzoDecompressor.cpp)
-set(VELOX_COMMON_COMPRESSION_LINK_LIBS velox_status Folly::folly)
-
-if(VELOX_ENABLE_COMPRESSION_LZ4)
-  list(APPEND VELOX_COMMON_COMPRESSION_SRCS Lz4Compression.cpp
-       HadoopCompressionFormat.cpp)
-  list(APPEND VELOX_COMMON_COMPRESSION_LINK_LIBS lz4::lz4)
-endif()
-
-velox_add_library(velox_common_compression ${VELOX_COMMON_COMPRESSION_SRCS})
+velox_add_library(
+  velox_common_compression
+  Compression.cpp
+  LzoDecompressor.cpp
+  Lz4Compression.cpp
+  HadoopCompressionFormat.cpp)
 velox_link_libraries(
   velox_common_compression
-  PUBLIC ${VELOX_COMMON_COMPRESSION_LINK_LIBS}
+  PUBLIC velox_status Folly::folly lz4::lz4
   PRIVATE velox_exception)
+
+if(VELOX_ENABLE_COMPRESSION_LZ4)
+  velox_sources(velox_common_compression PRIVATE Lz4Compression.cpp
+                HadoopCompressionFormat.cpp)
+  velox_link_libraries(velox_common_compression PUBLIC lz4::lz4)
+  velox_compile_definitions(velox_common_compression
+                            PRIVATE VELOX_ENABLE_COMPRESSION_LZ4)
+endif()

@@ -296,10 +296,6 @@ if(VELOX_ENABLE_PARQUET)
   set(VELOX_ENABLE_ARROW ON)
 endif()
 
-if(VELOX_ENABLE_COMPRESSION_LZ4)
-  add_definitions(-DVELOX_ENABLE_COMPRESSION_LZ4)
-endif()
-
 # make buildPartitionBounds_ a vector int64 instead of int32 to avoid integer
 # overflow
 if(${VELOX_ENABLE_INT64_BUILD_PARTITION_BOUND})
