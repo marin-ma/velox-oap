@@ -217,7 +217,7 @@ class Codec {
   /// compression library.
   /// Note: This functionality is not universally supported by all compression
   /// libraries. If not supported, `std::nullopt` will be returned.
-  std::optional<uint64_t> getUncompressedLength(
+  virtual std::optional<uint64_t> getUncompressedLength(
       uint64_t inputLength,
       const uint8_t* input) const;
 
