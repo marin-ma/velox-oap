@@ -218,8 +218,8 @@ class Codec {
   /// Note: This functionality is not universally supported by all compression
   /// libraries. If not supported, `std::nullopt` will be returned.
   virtual std::optional<uint64_t> getUncompressedLength(
-      uint64_t inputLength,
-      const uint8_t* input) const;
+      const uint8_t* input,
+      uint64_t inputLength) const;
 
   // Create a streaming compressor instance.
   virtual Expected<std::shared_ptr<StreamingCompressor>>
@@ -232,11 +232,11 @@ class Codec {
   // This Codec's compression type.
   virtual CompressionKind compressionKind() const = 0;
 
-  // The name of this Codec's compression type.
-  std::string name() const;
-
   // This Codec's compression level, if applicable.
   virtual int32_t compressionLevel() const;
+
+  // The name of this Codec's compression type.
+  std::string name() const;
 
  private:
   // Initializes the codec's resources.

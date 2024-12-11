@@ -422,11 +422,11 @@ TEST_P(CodecTest, getUncompressedLength) {
 
   if (Codec::supportsGetUncompressedLength(getCompressionKind())) {
     ASSERT_EQ(
-        codec->getUncompressedLength(compressedLength, compressed.data()),
+        codec->getUncompressedLength(compressed.data(), compressedLength),
         inputLength);
   } else {
     ASSERT_EQ(
-        codec->getUncompressedLength(compressedLength, compressed.data()),
+        codec->getUncompressedLength(compressed.data(), compressedLength),
         std::nullopt);
   }
 }

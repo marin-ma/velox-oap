@@ -198,8 +198,8 @@ bool Codec::isAvailable(CompressionKind kind) {
 }
 
 std::optional<uint64_t> Codec::getUncompressedLength(
-    uint64_t inputLength,
-    const uint8_t* input) const {
+    const uint8_t* input,
+    uint64_t inputLength) const {
   return std::nullopt;
 }
 
@@ -224,11 +224,11 @@ Codec::makeStreamingDecompressor() {
       "Streaming decompression is unsupported with {} format.", name()));
 }
 
-std::string Codec::name() const {
-  return compressionKindToString(compressionKind());
-}
-
 int32_t Codec::compressionLevel() const {
   return kUseDefaultCompressionLevel;
+}
+
+std::string Codec::name() const {
+  return compressionKindToString(compressionKind());
 }
 } // namespace facebook::velox::common
