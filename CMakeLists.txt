@@ -142,6 +142,8 @@ option(VELOX_ENABLE_REMOTE_FUNCTIONS "Enable remote function support" OFF)
 option(VELOX_ENABLE_CCACHE "Use ccache if installed." ON)
 option(VELOX_ENABLE_COMPRESSION_LZ4 "Enable Lz4 compression support." OFF)
 option(VELOX_ENABLE_COMPRESSION_ZSTD "Enable Zstd compression support." OFF)
+option(VELOX_ENABLE_COMPRESSION_ZLIB "Enable Zlib/Gzip compression support."
+       OFF)
 
 option(VELOX_BUILD_TEST_UTILS "Builds Velox test utilities" OFF)
 option(VELOX_BUILD_VECTOR_TEST_UTILS "Builds Velox vector test utilities" OFF)
@@ -178,6 +180,7 @@ endif()
 if(${VELOX_BUILD_MINIMAL_WITH_DWIO} OR ${VELOX_ENABLE_HIVE_CONNECTOR})
   set(VELOX_ENABLE_COMPRESSION_LZ4 ON)
   set(VELOX_ENABLE_COMPRESSION_ZSTD ON)
+  set(VELOX_ENABLE_COMPRESSION_ZLIB ON)
 endif()
 
 if(${VELOX_BUILD_TESTING})
@@ -193,6 +196,7 @@ if(${VELOX_BUILD_TESTING})
   set(VELOX_ENABLE_PARQUET ON)
   set(VELOX_ENABLE_COMPRESSION_LZ4 ON)
   set(VELOX_ENABLE_COMPRESSION_ZSTD ON)
+  set(VELOX_ENABLE_COMPRESSION_ZLIB ON)
 endif()
 
 if(${VELOX_ENABLE_BENCHMARKS})
@@ -494,11 +498,14 @@ if(VELOX_ENABLE_COMPRESSION_ZSTD)
   endif()
 endif()
 
+if(VELOX_ENABLE_COMPRESSION_ZLIB)
+  find_package(ZLIB REQUIRED)
+endif()
+
 if(${VELOX_BUILD_MINIMAL_WITH_DWIO} OR ${VELOX_ENABLE_HIVE_CONNECTOR})
   # DWIO needs all sorts of stream compression libraries.
   #
   # TODO: make these optional and pluggable.
-  find_package(ZLIB REQUIRED)
   find_package(lzo2 REQUIRED)
   find_package(Snappy REQUIRED)
 endif()

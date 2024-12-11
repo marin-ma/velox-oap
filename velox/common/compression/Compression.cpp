@@ -22,6 +22,9 @@
 #ifdef VELOX_ENABLE_COMPRESSION_ZSTD
 #include "velox/common/compression/ZstdCompression.h"
 #endif
+#ifdef VELOX_ENABLE_COMPRESSION_ZLIB
+#include "velox/common/compression/ZlibCompression.h"
+#endif
 
 #include <folly/Conv.h>
 
@@ -130,6 +133,12 @@ bool Codec::supportsStreamingCompression(CompressionKind kind) {
     case CompressionKind::CompressionKind_ZSTD:
       return true;
 #endif
+#ifdef VELOX_ENABLE_COMPRESSION_ZLIB
+    case CompressionKind::CompressionKind_ZLIB:
+      [[fallthrough]];
+    case CompressionKind::CompressionKind_GZIP:
+      return true;
+#endif
     default:
       return false;
   }
@@ -139,6 +148,12 @@ bool Codec::supportsCompressFixedLength(CompressionKind kind) {
   switch (kind) {
 #ifdef VELOX_ENABLE_COMPRESSION_ZSTD
     case CompressionKind::CompressionKind_ZSTD:
+      return true;
+#endif
+#ifdef VELOX_ENABLE_COMPRESSION_ZLIB
+    case CompressionKind::CompressionKind_ZLIB:
+      [[fallthrough]];
+    case CompressionKind::CompressionKind_GZIP:
       return true;
 #endif
     default:
@@ -187,6 +202,26 @@ Expected<std::unique_ptr<Codec>> Codec::create(
       codec = makeZstdCodec(compressionLevel);
       break;
 #endif
+#ifdef VELOX_ENABLE_COMPRESSION_ZLIB
+    case CompressionKind::CompressionKind_ZLIB: {
+      auto opt = dynamic_cast<const GzipCodecOptions*>(&codecOptions);
+      if (opt) {
+        codec = makeZlibCodec(compressionLevel, opt->windowBits);
+        break;
+      }
+      codec = makeZlibCodec(compressionLevel);
+      break;
+    }
+    case CompressionKind::CompressionKind_GZIP: {
+      auto opt = dynamic_cast<const GzipCodecOptions*>(&codecOptions);
+      if (opt) {
+        codec = makeGzipCodec(compressionLevel, opt->format, opt->windowBits);
+        break;
+      }
+      codec = makeGzipCodec(compressionLevel);
+      break;
+    }
+#endif
     default:
       break;
   }
@@ -218,6 +253,12 @@ bool Codec::isAvailable(CompressionKind kind) {
 #endif
 #ifdef VELOX_ENABLE_COMPRESSION_ZSTD
     case CompressionKind::CompressionKind_ZSTD:
+      return true;
+#endif
+#ifdef VELOX_ENABLE_COMPRESSION_ZLIB
+    case CompressionKind::CompressionKind_ZLIB:
+      [[fallthrough]];
+    case CompressionKind::CompressionKind_GZIP:
       return true;
 #endif
     default:
