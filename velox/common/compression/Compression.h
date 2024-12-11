@@ -240,7 +240,7 @@ class Codec {
 
  private:
   // Initializes the codec's resources.
-  virtual void init();
+  virtual Status init();
 };
 } // namespace facebook::velox::common
 

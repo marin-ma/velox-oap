@@ -102,7 +102,9 @@ CompressionKind stringToCompressionKind(const std::string& kind) {
   }
 }
 
-void Codec::init() {}
+Status Codec::init() {
+  return Status::OK();
+}
 
 bool Codec::supportsGetUncompressedLength(CompressionKind kind) {
   // TODO: Return true if it's supported by compression kind.
@@ -171,7 +173,7 @@ Expected<std::unique_ptr<Codec>> Codec::create(
         compressionKindToString(kind)));
   }
 
-  codec->init();
+  VELOX_RETURN_UNEXPECTED_NOT_OK(codec->init());
 
   return codec;
 }
