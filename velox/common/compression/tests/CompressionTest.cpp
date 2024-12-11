@@ -50,6 +50,19 @@ struct TestParams {
         codecOptions(std::move(codecOptions)) {}
 };
 
+std::vector<TestParams> generateLz4TestParams() {
+  std::vector<TestParams> params;
+  for (auto type :
+       {Lz4CodecOptions::kLz4Raw,
+        Lz4CodecOptions::kLz4Frame,
+        Lz4CodecOptions::kLz4Hadoop}) {
+    params.emplace_back(
+        CompressionKind::CompressionKind_LZ4,
+        std::make_shared<Lz4CodecOptions>(type));
+  }
+  return params;
+}
+
 std::vector<uint8_t> makeRandomData(size_t n) {
   std::vector<uint8_t> data(n);
   std::default_random_engine engine(42);
@@ -480,25 +493,9 @@ TEST_P(CodecTest, streamingDecompressorReuse) {
 }
 
 INSTANTIATE_TEST_SUITE_P(
-    TestLz4Frame,
+    TestLz4,
     CodecTest,
-    ::testing::Values(TestParams{
-        CompressionKind::CompressionKind_LZ4,
-        std::make_shared<Lz4CodecOptions>(Lz4CodecOptions::kLz4Frame)}));
-
-INSTANTIATE_TEST_SUITE_P(
-    TestLz4Raw,
-    CodecTest,
-    ::testing::Values(TestParams{
-        CompressionKind::CompressionKind_LZ4,
-        std::make_shared<Lz4CodecOptions>(Lz4CodecOptions::kLz4Raw)}));
-
-INSTANTIATE_TEST_SUITE_P(
-    TestLz4Hadoop,
-    CodecTest,
-    ::testing::Values(TestParams{
-        CompressionKind::CompressionKind_LZ4,
-        std::make_shared<Lz4CodecOptions>(Lz4CodecOptions::kLz4Hadoop)}));
+    ::testing::ValuesIn(generateLz4TestParams()));
 
 TEST(CodecLZ4HadoopTest, compatibility) {
   // LZ4 Hadoop codec should be able to read back LZ4 raw blocks.
