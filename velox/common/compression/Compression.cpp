@@ -102,7 +102,9 @@ CompressionKind stringToCompressionKind(const std::string& kind) {
   }
 }
 
-void Codec::init() {}
+Status Codec::init() {
+  return Status::OK();
+}
 
 bool Codec::supportsGetUncompressedLength(CompressionKind kind) {
   // TODO: Return true if it's supported by compression kind.
@@ -130,10 +132,9 @@ Expected<std::unique_ptr<Codec>> Codec::create(
     const CodecOptions& codecOptions) {
   if (!isAvailable(kind)) {
     auto name = compressionKindToString(kind);
-    if (folly::StringPiece({name}).startsWith("unknown")) {
-      return folly::makeUnexpected(
-          Status::Invalid("Unrecognized codec '{}'", name));
-    }
+    VELOX_RETURN_UNEXPECTED_IF(
+        folly::StringPiece({name}).startsWith("unknown"),
+        Status::Invalid("Unrecognized codec: ", name));
     return folly::makeUnexpected(Status::Invalid(
         "Support for codec '{}' is either not built or not implemented.",
         name));
@@ -164,14 +165,13 @@ Expected<std::unique_ptr<Codec>> Codec::create(
     default:
       break;
   }
+  VELOX_RETURN_UNEXPECTED_IF(
+      codec == nullptr,
+      Status::Invalid(fmt::format(
+          "Support for codec '{}' is either not built or not implemented.",
+          compressionKindToString(kind))));
 
-  if (codec == nullptr) {
-    return folly::makeUnexpected(Status::Invalid(
-        "Support for codec '{}' is either not built or not implemented.",
-        compressionKindToString(kind)));
-  }
-
-  codec->init();
+  VELOX_RETURN_UNEXPECTED_NOT_OK(codec->init());
 
   return codec;
 }
@@ -196,8 +196,8 @@ bool Codec::isAvailable(CompressionKind kind) {
 }
 
 std::optional<uint64_t> Codec::getUncompressedLength(
-    uint64_t inputLength,
-    const uint8_t* input) const {
+    const uint8_t* input,
+    uint64_t inputLength) const {
   return std::nullopt;
 }
 
@@ -222,11 +222,11 @@ Codec::makeStreamingDecompressor() {
       "Streaming decompression is unsupported with {} format.", name()));
 }
 
-std::string Codec::name() const {
-  return compressionKindToString(compressionKind());
-}
-
 int32_t Codec::compressionLevel() const {
   return kUseDefaultCompressionLevel;
+}
+
+std::string Codec::name() const {
+  return compressionKindToString(compressionKind());
 }
 } // namespace facebook::velox::common
