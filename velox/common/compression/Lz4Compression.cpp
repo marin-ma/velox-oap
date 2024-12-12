@@ -39,7 +39,7 @@ LZ4F_preferences_t defaultPreferences() {
   return prefs;
 }
 
-LZ4F_preferences_t defaultPreferences(int compressionLevel) {
+LZ4F_preferences_t defaultPreferences(int32_t compressionLevel) {
   LZ4F_preferences_t prefs = defaultPreferences();
   prefs.compressionLevel = compressionLevel;
   return prefs;
@@ -68,7 +68,7 @@ class LZ4Compressor : public StreamingCompressor {
   Status
   compressBegin(uint8_t* output, size_t& outputLen, uint64_t& bytesWritten);
 
-  int compressionLevel_;
+  int32_t compressionLevel_;
   LZ4F_compressionContext_t ctx_{nullptr};
   LZ4F_preferences_t prefs_;
   bool firstTime_;
@@ -392,9 +392,9 @@ Expected<uint64_t> Lz4RawCodec::compress(
     uint64_t outputLength) {
   uint64_t compressedSize;
 #ifdef LZ4HC_CLEVEL_MIN
-  constexpr int kMinHcClevel = LZ4HC_CLEVEL_MIN;
+  constexpr int32_t kMinHcClevel = LZ4HC_CLEVEL_MIN;
 #else // For older versions of the lz4 library.
-  constexpr int kMinHcClevel = 3;
+  constexpr int32_t kMinHcClevel = 3;
 #endif
   if (compressionLevel_ < kMinHcClevel) {
     compressedSize = LZ4_compress_default(

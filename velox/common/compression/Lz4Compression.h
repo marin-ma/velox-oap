@@ -51,7 +51,7 @@ class Lz4CodecBase : public Codec {
   CompressionKind compressionKind() const override;
 
  protected:
-  const int compressionLevel_;
+  const int32_t compressionLevel_;
 };
 
 class Lz4FrameCodec : public Lz4CodecBase {
@@ -143,6 +143,6 @@ std::unique_ptr<Codec> makeLz4FrameCodec(
 std::unique_ptr<Codec> makeLz4RawCodec(
     int32_t compressionLevel = kUseDefaultCompressionLevel);
 
-// Lz4 "Hadoop" format codec (== Lz4 raw codec prefixed with lengths header)
+// Lz4 "Hadoop" format codec (Lz4 raw codec prefixed with lengths header).
 std::unique_ptr<Codec> makeLz4HadoopCodec();
 } // namespace facebook::velox::common
