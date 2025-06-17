@@ -25,6 +25,7 @@
 #include "arrow/util/checked_cast.h"
 
 #include "velox/common/base/Exceptions.h"
+#include "velox/common/compression/Compression.h"
 #include "velox/dwio/parquet/writer/arrow/Exception.h"
 #include "velox/dwio/parquet/writer/arrow/Types.h"
 
@@ -35,53 +36,6 @@ namespace facebook::velox::parquet::arrow {
 fmt::underlying_t<LogicalType::TimeUnit::unit> format_as(
     LogicalType::TimeUnit::unit unit) {
   return fmt::underlying(unit);
-}
-
-bool IsCodecSupported(Compression::type codec) {
-  switch (codec) {
-    case Compression::UNCOMPRESSED:
-    case Compression::SNAPPY:
-    case Compression::GZIP:
-    case Compression::BROTLI:
-    case Compression::ZSTD:
-    case Compression::LZ4:
-    case Compression::LZ4_HADOOP:
-      return true;
-    default:
-      return false;
-  }
-}
-
-std::unique_ptr<util::Codec> GetCodec(Compression::type codec) {
-  return GetCodec(codec, util::CodecOptions());
-}
-
-std::unique_ptr<util::Codec> GetCodec(
-    Compression::type codec,
-    const util::CodecOptions& codec_options) {
-  std::unique_ptr<util::Codec> result;
-  if (codec == Compression::LZO) {
-    throw ParquetException(
-        "While LZO compression is supported by the Parquet format in "
-        "general, it is currently not supported by the C++ implementation.");
-  }
-
-  if (!IsCodecSupported(codec)) {
-    std::stringstream ss;
-    ss << "Codec type " << util::Codec::GetCodecAsString(codec)
-       << " not supported in Parquet format";
-    throw ParquetException(ss.str());
-  }
-
-  PARQUET_ASSIGN_OR_THROW(result, util::Codec::Create(codec, codec_options));
-  return result;
-}
-
-// use compression level to create Codec
-std::unique_ptr<util::Codec> GetCodec(
-    Compression::type codec,
-    int compression_level) {
-  return GetCodec(codec, util::CodecOptions{compression_level});
 }
 
 bool PageCanUseChecksum(PageType::type pageType) {
@@ -771,8 +725,10 @@ class LogicalType::Impl::Compatible : public virtual LogicalType::Impl {
     }                                                \
   }
 
-#define reset_decimal_metadata(m___) \
-  { set_decimal_metadata(m___, false, -1, -1); }
+#define reset_decimal_metadata(m___)           \
+  {                                            \
+    set_decimal_metadata(m___, false, -1, -1); \
+  }
 
 // For logical types that always translate to the same converted type
 class LogicalType::Impl::SimpleCompatible

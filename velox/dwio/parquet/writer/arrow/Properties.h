@@ -27,6 +27,7 @@
 #include "arrow/io/caching.h"
 #include "arrow/type.h"
 #include "arrow/util/type_fwd.h"
+#include "velox/common/compression/Compression.h"
 #include "velox/dwio/parquet/writer/arrow/Encryption.h"
 #include "velox/dwio/parquet/writer/arrow/Exception.h"
 #include "velox/dwio/parquet/writer/arrow/Platform.h"
@@ -258,12 +259,13 @@ class PARQUET_EXPORT ColumnProperties {
 
   void set_compression_level(int compression_level) {
     if (!codec_options_) {
-      codec_options_ = std::make_shared<CodecOptions>();
+      codec_options_ = std::make_shared<common::CodecOptions>();
     }
-    codec_options_->compression_level = compression_level;
+    codec_options_->compressionLevel = compression_level;
   }
 
-  void set_codec_options(const std::shared_ptr<CodecOptions>& codec_options) {
+  void set_codec_options(
+      const std::shared_ptr<common::CodecOptions>& codec_options) {
     codec_options_ = codec_options;
   }
 
@@ -292,10 +294,10 @@ class PARQUET_EXPORT ColumnProperties {
   }
 
   int compression_level() const {
-    return codec_options_->compression_level;
+    return codec_options_->compressionLevel;
   }
 
-  const std::shared_ptr<CodecOptions>& codec_options() const {
+  const std::shared_ptr<common::CodecOptions>& codec_options() const {
     return codec_options_;
   }
 
@@ -309,7 +311,7 @@ class PARQUET_EXPORT ColumnProperties {
   bool dictionary_enabled_;
   bool statistics_enabled_;
   size_t max_stats_size_;
-  std::shared_ptr<CodecOptions> codec_options_;
+  std::shared_ptr<common::CodecOptions> codec_options_;
   bool page_index_enabled_;
 };
 
@@ -539,9 +541,9 @@ class PARQUET_EXPORT WriterProperties {
     /// compression level.
     Builder* compression_level(const std::string& path, int compression_level) {
       if (!codec_options_[path]) {
-        codec_options_[path] = std::make_shared<CodecOptions>();
+        codec_options_[path] = std::make_shared<common::CodecOptions>();
       }
-      codec_options_[path]->compression_level = compression_level;
+      codec_options_[path]->compressionLevel = compression_level;
       return this;
     }
 
@@ -567,7 +569,8 @@ class PARQUET_EXPORT WriterProperties {
     ///
     /// The codec options allow configuring the compression level as well
     /// as other codec-specific options.
-    Builder* codec_options(const std::shared_ptr<CodecOptions>& codec_options) {
+    Builder* codec_options(
+        const std::shared_ptr<common::CodecOptions>& codec_options) {
       default_column_properties_.set_codec_options(codec_options);
       return this;
     }
@@ -576,7 +579,7 @@ class PARQUET_EXPORT WriterProperties {
     /// described by path.
     Builder* codec_options(
         const std::string& path,
-        const std::shared_ptr<CodecOptions>& codec_options) {
+        const std::shared_ptr<common::CodecOptions>& codec_options) {
       codec_options_[path] = codec_options;
       return this;
     }
@@ -585,7 +588,7 @@ class PARQUET_EXPORT WriterProperties {
     /// described by path.
     Builder* codec_options(
         const std::shared_ptr<schema::ColumnPath>& path,
-        const std::shared_ptr<CodecOptions>& codec_options) {
+        const std::shared_ptr<common::CodecOptions>& codec_options) {
       return this->codec_options(path->ToDotString(), codec_options);
     }
 
@@ -798,7 +801,7 @@ class PARQUET_EXPORT WriterProperties {
     ColumnProperties default_column_properties_;
     std::unordered_map<std::string, Encoding::type> encodings_;
     std::unordered_map<std::string, Compression::type> codecs_;
-    std::unordered_map<std::string, std::shared_ptr<CodecOptions>>
+    std::unordered_map<std::string, std::shared_ptr<common::CodecOptions>>
         codec_options_;
     std::unordered_map<std::string, bool> dictionary_enabled_;
     std::unordered_map<std::string, bool> statistics_enabled_;
@@ -883,7 +886,7 @@ class PARQUET_EXPORT WriterProperties {
     return column_properties(path).compression_level();
   }
 
-  const std::shared_ptr<CodecOptions> codec_options(
+  const std::shared_ptr<common::CodecOptions> codec_options(
       const std::shared_ptr<schema::ColumnPath>& path) const {
     return column_properties(path).codec_options();
   }

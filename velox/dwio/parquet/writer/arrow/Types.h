@@ -507,23 +507,6 @@ enum class ExposedEncoding {
   DICTIONARY = 1
 };
 
-/// \brief Return true if Parquet supports indicated compression type
-PARQUET_EXPORT
-bool IsCodecSupported(Compression::type codec);
-
-PARQUET_EXPORT
-std::unique_ptr<util::Codec> GetCodec(Compression::type codec);
-
-PARQUET_EXPORT
-std::unique_ptr<util::Codec> GetCodec(
-    Compression::type codec,
-    const util::CodecOptions& codec_options);
-
-PARQUET_EXPORT
-std::unique_ptr<util::Codec> GetCodec(
-    Compression::type codec,
-    int compression_level);
-
 struct ParquetCipher {
   enum type { AES_GCM_V1 = 0, AES_GCM_CTR_V1 = 1 };
 };

@@ -22,11 +22,11 @@
 #include <cstring>
 #include <memory>
 
+#include "velox/common/compression/Compression.h"
 #include "velox/dwio/parquet/common/RleEncodingInternal.h"
 #include "velox/dwio/parquet/writer/arrow/Exception.h"
 #include "velox/dwio/parquet/writer/arrow/Platform.h"
 #include "velox/dwio/parquet/writer/arrow/Types.h"
-#include "velox/dwio/parquet/writer/arrow/util/Compression.h"
 
 namespace arrow {
 class Array;
@@ -111,7 +111,7 @@ class PARQUET_EXPORT PageWriter {
       ColumnIndexBuilder* column_index_builder = NULLPTR,
       // offset_index_builder MUST outlive the PageWriter
       OffsetIndexBuilder* offset_index_builder = NULLPTR,
-      const util::CodecOptions& codec_options = util::CodecOptions{});
+      const common::CodecOptions& codec_options = common::CodecOptions{});
 
   // TODO: remove this and port to new signature.
   // ARROW_DEPRECATED(

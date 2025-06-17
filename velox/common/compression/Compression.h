@@ -57,7 +57,7 @@ class StreamingDecompressor;
 struct CodecOptions {
   int32_t compressionLevel;
 
-  CodecOptions(int32_t compressionLevel = kDefaultCompressionLevel)
+  explicit CodecOptions(int32_t compressionLevel = kDefaultCompressionLevel)
       : compressionLevel(compressionLevel) {}
 
   virtual ~CodecOptions() = default;
