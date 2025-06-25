@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "connectors/hive/storage_adapters/abfs/RegisterAbfsFileSystem.h"
 #include "velox/common/base/tests/GTestUtils.h"
 #include "velox/common/config/Config.h"
 #include "velox/connectors/hive/storage_adapters/abfs/AbfsConfig.h"
@@ -110,6 +111,28 @@ TEST(AbfsConfigTest, sasToken) {
   EXPECT_EQ(
       writeClient->getUrl(),
       "http://bar.blob.core.windows.net/abc/file?sas=test");
+
+  registerAbfsSasKeyGenerator(
+      "efg", [](const std::string&, const std::string&) {
+        return "sas=efg_sas_token";
+      });
+  abfsConfig = AbfsConfig("abfs://abc@efg.dfs.core.windows.net/file", config);
+  readClient = abfsConfig.getReadFileClient();
+  EXPECT_EQ(
+      readClient->GetUrl(),
+      "http://efg.blob.core.windows.net/abc/file?sas=efg_sas_token");
+  writeClient = abfsConfig.getWriteFileClient();
+  EXPECT_EQ(
+      writeClient->getUrl(),
+      "http://efg.blob.core.windows.net/abc/file?sas=efg_sas_token");
+
+  VELOX_ASSERT_USER_THROW(
+      registerAbfsSasKeyGenerator(
+          "efg",
+          [](const std::string&, const std::string&) {
+            return "sas=another_efg_sas_token";
+          }),
+      "SAS key generator for efg already registered");
 }
 
 TEST(AbfsConfigTest, sharedKey) {

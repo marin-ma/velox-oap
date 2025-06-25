@@ -16,9 +16,19 @@
 
 #pragma once
 
+#include <functional>
+
 namespace facebook::velox::filesystems {
+
+using AbfsSasKeyGenerator = std::function<
+    std::string(const std::string& fileSystem, const std::string& path)>;
 
 // Register the ABFS filesystem.
 void registerAbfsFileSystem();
+
+// Register a SAS key generator for ABFS.
+void registerAbfsSasKeyGenerator(
+    const std::string& accountName,
+    const AbfsSasKeyGenerator& generator);
 
 } // namespace facebook::velox::filesystems

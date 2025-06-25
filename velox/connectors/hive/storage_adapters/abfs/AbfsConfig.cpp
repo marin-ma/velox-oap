@@ -20,8 +20,22 @@
 #include "velox/connectors/hive/storage_adapters/abfs/AbfsUtil.h"
 
 #include <azure/identity/client_secret_credential.hpp>
+#include <folly/Synchronized.h>
+#include <string>
+#include <unordered_map>
 
 namespace facebook::velox::filesystems {
+namespace {
+
+folly::Synchronized<std::unordered_map<std::string, AbfsSasKeyGenerator>>&
+sasKeyGenerators() {
+  static folly::Synchronized<
+      std::unordered_map<std::string, AbfsSasKeyGenerator>>
+      generators;
+  return generators;
+}
+
+} // namespace
 
 std::function<std::unique_ptr<AzureDataLakeFileClient>()>
     AbfsConfig::testWriteClientFn_;
@@ -61,6 +75,28 @@ class DataLakeFileClientWrapper final : public AzureDataLakeFileClient {
   const std::unique_ptr<DataLakeFileClient> client_;
 };
 
+AbfsSasKeyGenerator getSasKeyGenerator(const std::string& accountName) {
+  return sasKeyGenerators().withRLock(
+      [&](const auto& generators) -> AbfsSasKeyGenerator {
+        if (const auto it = generators.find(accountName);
+            it != generators.end()) {
+          return it->second;
+        }
+        return nullptr;
+      });
+}
+
+void registerSasKeyGenerator(
+    const std::string& accountName,
+    const AbfsSasKeyGenerator& generator) {
+  sasKeyGenerators().withWLock([&](auto& generators) {
+    if (generators.find(accountName) != generators.end()) {
+      VELOX_USER_FAIL("SAS key generator for {} already registered", accountName);
+    }
+    generators.emplace(accountName, generator);
+  });
+}
+
 AbfsConfig::AbfsConfig(
     std::string_view path,
     const config::ConfigBase& config) {
@@ -80,6 +116,8 @@ AbfsConfig::AbfsConfig(
   auto firstSep = file.find_first_of("/");
   filePath_ = file.substr(firstSep + 1);
   accountNameWithSuffix_ = file.substr(firstAt + 1, firstSep - firstAt - 1);
+  auto firstDot = accountNameWithSuffix_.find_first_of(".");
+  accountName_ = accountNameWithSuffix_.substr(0, firstDot);
 
   auto authTypeKey =
       fmt::format("{}.{}", kAzureAccountAuthType, accountNameWithSuffix_);
@@ -92,12 +130,10 @@ AbfsConfig::AbfsConfig(
         fmt::format("{}.{}", kAzureAccountKey, accountNameWithSuffix_);
     VELOX_USER_CHECK(
         config.valueExists(credKey), "Config {} not found", credKey);
-    auto firstDot = accountNameWithSuffix_.find_first_of(".");
-    auto accountName = accountNameWithSuffix_.substr(0, firstDot);
     auto endpointSuffix = accountNameWithSuffix_.substr(firstDot + 5);
     std::stringstream ss;
     ss << "DefaultEndpointsProtocol=" << (isHttps_ ? "https" : "http");
-    ss << ";AccountName=" << accountName;
+    ss << ";AccountName=" << accountName_;
     ss << ";AccountKey=" << config.get<std::string>(credKey).value();
     ss << ";EndpointSuffix=" << endpointSuffix;
 
@@ -138,9 +174,14 @@ AbfsConfig::AbfsConfig(
             config.get<std::string>(clientSecretKey).value(),
             options);
   } else if (authType_ == kAzureSASAuthType) {
-    auto sasKey = fmt::format("{}.{}", kAzureSASKey, accountNameWithSuffix_);
-    VELOX_USER_CHECK(config.valueExists(sasKey), "Config {} not found", sasKey);
-    sas_ = config.get<std::string>(sasKey).value();
+    if (sasKeyGenerator_ = getSasKeyGenerator(accountName_);
+        sasKeyGenerator_ == nullptr) {
+      // Use the fixed SAS key if no SAS key generator is registered.
+      auto sasKey = fmt::format("{}.{}", kAzureSASKey, accountNameWithSuffix_);
+      VELOX_USER_CHECK(
+          config.valueExists(sasKey), "Config {} not found", sasKey);
+      sas_ = config.get<std::string>(sasKey).value();
+    }
   } else {
     VELOX_USER_FAIL(
         "Unsupported auth type {}, supported auth types are SharedKey, OAuth and SAS.",
@@ -151,7 +192,7 @@ AbfsConfig::AbfsConfig(
 std::unique_ptr<BlobClient> AbfsConfig::getReadFileClient() {
   if (authType_ == kAzureSASAuthType) {
     auto url = getUrl(true);
-    return std::make_unique<BlobClient>(fmt::format("{}?{}", url, sas_));
+    return std::make_unique<BlobClient>(fmt::format("{}?{}", url, getSas()));
   } else if (authType_ == kAzureOAuthAuthType) {
     auto url = getUrl(true);
     return std::make_unique<BlobClient>(url, tokenCredential_);
@@ -168,8 +209,8 @@ std::unique_ptr<AzureDataLakeFileClient> AbfsConfig::getWriteFileClient() {
   std::unique_ptr<DataLakeFileClient> client;
   if (authType_ == kAzureSASAuthType) {
     auto url = getUrl(false);
-    client =
-        std::make_unique<DataLakeFileClient>(fmt::format("{}?{}", url, sas_));
+    client = std::make_unique<DataLakeFileClient>(
+        fmt::format("{}?{}", url, getSas()));
   } else if (authType_ == kAzureOAuthAuthType) {
     auto url = getUrl(false);
     client = std::make_unique<DataLakeFileClient>(url, tokenCredential_);
@@ -196,6 +237,13 @@ std::string AbfsConfig::getUrl(bool withblobSuffix) {
       accountNameWithSuffixForUrl,
       fileSystem_,
       filePath_);
+}
+
+std::string AbfsConfig::getSas() {
+  if (sasKeyGenerator_ != nullptr) {
+    return sasKeyGenerator_(fileSystem_, filePath_);
+  }
+  return sas_;
 }
 
 } // namespace facebook::velox::filesystems

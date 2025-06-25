@@ -32,6 +32,15 @@ class ConfigBase;
 
 namespace facebook::velox::filesystems {
 
+using AbfsSasKeyGenerator = std::function<
+    std::string(const std::string& fileSystem, const std::string& path)>;
+
+AbfsSasKeyGenerator getSasKeyGenerator(const std::string& accountName);
+
+void registerSasKeyGenerator(
+    const std::string& accountName,
+    const AbfsSasKeyGenerator& generator);
+
 // This is used to specify the Azurite endpoint in testing.
 static constexpr const char* kAzureBlobEndpoint{"fs.azure.blob-endpoint"};
 
@@ -107,6 +116,8 @@ class AbfsConfig {
  private:
   std::string getUrl(bool withblobSuffix);
 
+  std::string getSas();
+
   std::string authType_;
 
   // Container name is called FileSystem in some Azure API.
@@ -116,8 +127,10 @@ class AbfsConfig {
 
   bool isHttps_;
   std::string accountNameWithSuffix_;
+  std::string accountName_;
 
   std::string sas_;
+  AbfsSasKeyGenerator sasKeyGenerator_;
 
   std::string tenentId_;
   std::string authorityHost_;
