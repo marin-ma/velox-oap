@@ -32,8 +32,10 @@ class ConfigBase;
 
 namespace facebook::velox::filesystems {
 
-using AbfsSasKeyGenerator = std::function<
-    std::string(const std::string& fileSystem, const std::string& path)>;
+using AbfsSasKeyGenerator = std::function<std::string(
+    const std::string& fileSystem,
+    const std::string& path,
+    const std::string& operation)>;
 
 AbfsSasKeyGenerator getSasKeyGenerator(const std::string& accountName);
 
@@ -116,7 +118,7 @@ class AbfsConfig {
  private:
   std::string getUrl(bool withblobSuffix);
 
-  std::string getSas();
+  std::string getSas(const std::string& operation);
 
   std::string authType_;
 

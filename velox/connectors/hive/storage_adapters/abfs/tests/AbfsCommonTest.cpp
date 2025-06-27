@@ -113,7 +113,7 @@ TEST(AbfsConfigTest, sasToken) {
       "http://bar.blob.core.windows.net/abc/file?sas=test");
 
   registerAbfsSasKeyGenerator(
-      "efg", [](const std::string&, const std::string&) {
+      "efg", [](const std::string&, const std::string&, const std::string&) {
         return "sas=efg_sas_token";
       });
   abfsConfig = AbfsConfig("abfs://abc@efg.dfs.core.windows.net/file", config);
@@ -129,7 +129,7 @@ TEST(AbfsConfigTest, sasToken) {
   VELOX_ASSERT_USER_THROW(
       registerAbfsSasKeyGenerator(
           "efg",
-          [](const std::string&, const std::string&) {
+          [](const std::string&, const std::string&, const std::string&) {
             return "sas=another_efg_sas_token";
           }),
       "SAS key generator for efg already registered");

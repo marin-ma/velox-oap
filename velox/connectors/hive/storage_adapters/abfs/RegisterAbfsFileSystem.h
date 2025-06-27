@@ -20,8 +20,10 @@
 
 namespace facebook::velox::filesystems {
 
-using AbfsSasKeyGenerator = std::function<
-    std::string(const std::string& fileSystem, const std::string& path)>;
+using AbfsSasKeyGenerator = std::function<std::string(
+    const std::string& fileSystem,
+    const std::string& path,
+    const std::string& operation)>;
 
 // Register the ABFS filesystem.
 void registerAbfsFileSystem();

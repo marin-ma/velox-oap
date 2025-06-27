@@ -91,7 +91,8 @@ void registerSasKeyGenerator(
     const AbfsSasKeyGenerator& generator) {
   sasKeyGenerators().withWLock([&](auto& generators) {
     if (generators.find(accountName) != generators.end()) {
-      VELOX_USER_FAIL("SAS key generator for {} already registered", accountName);
+      VELOX_USER_FAIL(
+          "SAS key generator for {} already registered", accountName);
     }
     generators.emplace(accountName, generator);
   });
@@ -192,7 +193,9 @@ AbfsConfig::AbfsConfig(
 std::unique_ptr<BlobClient> AbfsConfig::getReadFileClient() {
   if (authType_ == kAzureSASAuthType) {
     auto url = getUrl(true);
-    return std::make_unique<BlobClient>(fmt::format("{}?{}", url, getSas()));
+    static const std::string kReadOperation = "read";
+    return std::make_unique<BlobClient>(
+        fmt::format("{}?{}", url, getSas(kReadOperation)));
   } else if (authType_ == kAzureOAuthAuthType) {
     auto url = getUrl(true);
     return std::make_unique<BlobClient>(url, tokenCredential_);
@@ -209,8 +212,9 @@ std::unique_ptr<AzureDataLakeFileClient> AbfsConfig::getWriteFileClient() {
   std::unique_ptr<DataLakeFileClient> client;
   if (authType_ == kAzureSASAuthType) {
     auto url = getUrl(false);
+    static const std::string kWriteOperation = "write";
     client = std::make_unique<DataLakeFileClient>(
-        fmt::format("{}?{}", url, getSas()));
+        fmt::format("{}?{}", url, getSas(kWriteOperation)));
   } else if (authType_ == kAzureOAuthAuthType) {
     auto url = getUrl(false);
     client = std::make_unique<DataLakeFileClient>(url, tokenCredential_);
@@ -239,9 +243,9 @@ std::string AbfsConfig::getUrl(bool withblobSuffix) {
       filePath_);
 }
 
-std::string AbfsConfig::getSas() {
+std::string AbfsConfig::getSas(const std::string& operation) {
   if (sasKeyGenerator_ != nullptr) {
-    return sasKeyGenerator_(fileSystem_, filePath_);
+    return sasKeyGenerator_(fileSystem_, filePath_, operation);
   }
   return sas_;
 }
