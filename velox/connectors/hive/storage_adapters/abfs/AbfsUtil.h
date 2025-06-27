@@ -34,11 +34,19 @@ inline std::string throwStorageExceptionWithOperationDetails(
     std::string operation,
     std::string path,
     Azure::Storage::StorageException& error) {
+  const auto& e = error;
+  std::stringstream ss;
+  ss << "e.ErrorCode " << e.ErrorCode << '\n';
+  ss << "e.Message " << e.Message << '\n';
+  for (const auto& i : e.AdditionalInformation) {
+    ss << i.first << ":" << i.second << '\n';
+  }
   const auto errMsg = fmt::format(
-      "Operation '{}' to path '{}' encountered azure storage exception, Details: '{}'.",
+      "Operation '{}' to path '{}' encountered azure storage exception, Details: '{}'.\n{}",
       operation,
       path,
-      error.what());
+      error.what(),
+      ss.str());
   if (error.StatusCode == Azure::Core::Http::HttpStatusCode::NotFound) {
     VELOX_FILE_NOT_FOUND_ERROR(errMsg);
   }
