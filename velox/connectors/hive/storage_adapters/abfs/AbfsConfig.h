@@ -21,6 +21,8 @@
 #include <azure/storage/files/datalake.hpp>
 #include <folly/hash/Hash.h>
 #include <string>
+
+#include "velox/connectors/hive/storage_adapters/abfs/AzureBlobClient.h"
 #include "velox/connectors/hive/storage_adapters/abfs/AzureDataLakeFileClient.h"
 
 using namespace Azure::Storage::Blobs;
@@ -76,7 +78,7 @@ class AbfsConfig {
  public:
   explicit AbfsConfig(std::string_view path, const config::ConfigBase& config);
 
-  std::unique_ptr<BlobClient> getReadFileClient();
+  std::unique_ptr<AzureBlobClient> getReadFileClient();
 
   std::unique_ptr<AzureDataLakeFileClient> getWriteFileClient();
 
@@ -117,8 +119,6 @@ class AbfsConfig {
 
  private:
   std::string getUrl(bool withblobSuffix);
-
-  std::string getSas(const std::string& operation);
 
   std::string authType_;
 

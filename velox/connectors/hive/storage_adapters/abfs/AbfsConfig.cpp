@@ -35,6 +35,59 @@ sasKeyGenerators() {
   return generators;
 }
 
+Azure::DateTime getExpiry(const std::string& token) {
+  if (token.empty()) {
+    return Azure::DateTime::clock::time_point::min();
+  }
+
+  const std::string signedExpiry = "se=";
+  const int32_t signedExpiryLen = 3;
+
+  auto start = token.find(signedExpiry);
+  if (start == std::string::npos) {
+    return Azure::DateTime::clock::time_point::min();
+  }
+  start += signedExpiryLen;
+
+  auto end = token.find("&", start);
+  std::string seValue = (end == std::string::npos)
+      ? token.substr(start)
+      : token.substr(start, end - start);
+
+  seValue = Azure::Core::Url::Decode(seValue);
+  auto seDate =
+      Azure::DateTime::Parse(seValue, Azure::DateTime::DateFormat::Rfc3339);
+
+  const std::string signedKeyExpiry = "ske=";
+  const int32_t signedKeyExpiryLen = 4;
+
+  start = token.find(signedKeyExpiry);
+  if (start == std::string::npos) {
+    return seDate;
+  }
+  start += signedKeyExpiryLen;
+
+  end = token.find("&", start);
+  std::string skeValue = (end == std::string::npos)
+      ? token.substr(start)
+      : token.substr(start, end - start);
+
+  skeValue = Azure::Core::Url::Decode(skeValue);
+  auto skeDate =
+      Azure::DateTime::Parse(skeValue, Azure::DateTime::DateFormat::Rfc3339);
+
+  return std::min(skeDate, seDate);
+}
+
+bool isNearExpiry(Azure::DateTime expiration, int64_t minExpirationInSeconds) {
+  if (expiration == Azure::DateTime::clock::time_point::min()) {
+    return true;
+  }
+  auto remaining = std::chrono::duration_cast<std::chrono::seconds>(
+      expiration - Azure::DateTime::clock::now());
+  return remaining.count() < minExpirationInSeconds;
+}
+
 } // namespace
 
 std::function<std::unique_ptr<AzureDataLakeFileClient>()>
@@ -73,6 +126,148 @@ class DataLakeFileClientWrapper final : public AzureDataLakeFileClient {
 
  private:
   const std::unique_ptr<DataLakeFileClient> client_;
+};
+
+class DynamicSasKeyDataLakeFileClient final : public AzureDataLakeFileClient {
+ public:
+  DynamicSasKeyDataLakeFileClient(
+      const std::string& fileUrl,
+      const std::string& fileSystem,
+      const std::string& filePath,
+      const AbfsSasKeyGenerator& sasKeyGenerator)
+      : fileUrl_(fileUrl),
+        fileSystem_(fileSystem),
+        filePath_(filePath),
+        sasKeyGenerator_(sasKeyGenerator) {}
+
+  void create() override {}
+
+  Azure::Storage::Files::DataLake::Models::PathProperties getProperties()
+      override {
+    return getReadClient()->GetProperties().Value;
+  }
+
+  void append(const uint8_t* buffer, size_t size, uint64_t offset) override {
+    auto bodyStream = Azure::Core::IO::MemoryBodyStream(buffer, size);
+    getWriteClient()->Append(bodyStream, offset);
+  }
+
+  void flush(uint64_t position) override {
+    getWriteClient()->Flush(position);
+  }
+
+  void close() override {}
+
+  std::string getUrl() const override {
+    VELOX_CHECK_NOT_NULL(writeClient_);
+    return writeClient_->GetUrl();
+  }
+
+ private:
+  std::string fileUrl_;
+  std::string fileSystem_;
+  std::string filePath_;
+  AbfsSasKeyGenerator sasKeyGenerator_;
+  int64_t minExpirationInSeconds_ = 30;
+
+  std::unique_ptr<DataLakeFileClient> writeClient_;
+  Azure::DateTime writeSasExpiration_;
+
+  std::unique_ptr<DataLakeFileClient> readClient_;
+  Azure::DateTime readSasExpiration_;
+
+  DataLakeFileClient* getWriteClient() {
+    if (isNearExpiry(writeSasExpiration_, minExpirationInSeconds_)) {
+      const auto sas = sasKeyGenerator_(fileSystem_, filePath_, "write");
+      writeSasExpiration_ = getExpiry(sas);
+      writeClient_ = std::make_unique<DataLakeFileClient>(
+          fmt::format("{}?{}", fileUrl_, sas));
+    }
+    return writeClient_.get();
+  }
+
+  DataLakeFileClient* getReadClient() {
+    if (isNearExpiry(readSasExpiration_, minExpirationInSeconds_)) {
+      const auto sas =
+          sasKeyGenerator_(fileSystem_, filePath_, "get-properties");
+      readSasExpiration_ = getExpiry(sas);
+      readClient_ = std::make_unique<DataLakeFileClient>(
+          fmt::format("{}?{}", fileUrl_, sas));
+    }
+    return readClient_.get();
+  }
+};
+
+class AzureBlobFileClientWrapper : public AzureBlobClient {
+ public:
+  AzureBlobFileClientWrapper(
+      std::unique_ptr<Azure::Storage::Blobs::BlobClient> client) {
+    blobClient_ = std::move(client);
+  }
+
+  Azure::Response<Azure::Storage::Blobs::Models::BlobProperties> GetProperties()
+      override {
+    return blobClient_->GetProperties();
+  }
+
+  Azure::Response<Azure::Storage::Blobs::Models::DownloadBlobResult> Download(
+      const Azure::Storage::Blobs::DownloadBlobOptions& options) override {
+    return blobClient_->Download(options);
+  }
+
+  std::string GetUrl() override {
+    return blobClient_->GetUrl();
+  }
+
+ private:
+  std::unique_ptr<Azure::Storage::Blobs::BlobClient> blobClient_;
+};
+
+class DynamicSasKeyBlobClient : public Azure::Storage::Blobs::BlobClient,
+                                public AzureBlobClient {
+ public:
+  DynamicSasKeyBlobClient(
+      const std::string& blobUrl,
+      const std::string& fileSystem,
+      const std::string& filePath,
+      const AbfsSasKeyGenerator& sasKeyGenerator)
+      : BlobClient(blobUrl),
+        blobUrl_(blobUrl),
+        fileSystem_(fileSystem),
+        filePath_(filePath),
+        sasKeyGenerator_(sasKeyGenerator) {}
+
+  Azure::Response<Azure::Storage::Blobs::Models::BlobProperties> GetProperties()
+      override {
+    updateBlobUrl();
+    return BlobClient::GetProperties();
+  }
+
+  Azure::Response<Azure::Storage::Blobs::Models::DownloadBlobResult> Download(
+      const Azure::Storage::Blobs::DownloadBlobOptions& options) override {
+    updateBlobUrl();
+    return BlobClient::Download(options);
+  }
+
+  std::string GetUrl() override {
+    return BlobClient::GetUrl();
+  }
+
+ private:
+  std::string blobUrl_;
+  std::string fileSystem_;
+  std::string filePath_;
+  AbfsSasKeyGenerator sasKeyGenerator_;
+
+  Azure::DateTime sasExpiration_ = Azure::DateTime::clock::time_point::min();
+
+  void updateBlobUrl() {
+    if (isNearExpiry(sasExpiration_, 30)) {
+      auto sas = sasKeyGenerator_(fileSystem_, filePath_, "get-properties");
+      sasExpiration_ = getExpiry(sas);
+      m_blobUrl = Azure::Core::Url(fmt::format("{}?{}", blobUrl_, sas));
+    }
+  }
 };
 
 AbfsSasKeyGenerator getSasKeyGenerator(const std::string& accountName) {
@@ -190,31 +385,39 @@ AbfsConfig::AbfsConfig(
   }
 }
 
-std::unique_ptr<BlobClient> AbfsConfig::getReadFileClient() {
+std::unique_ptr<AzureBlobClient> AbfsConfig::getReadFileClient() {
+  if (sasKeyGenerator_ != nullptr) {
+    return std::make_unique<DynamicSasKeyBlobClient>(
+        getUrl(true), fileSystem_, filePath_, sasKeyGenerator_);
+  }
+  std::unique_ptr<BlobClient> client;
   if (authType_ == kAzureSASAuthType) {
     auto url = getUrl(true);
-    static const std::string kReadOperation = "read";
-    return std::make_unique<BlobClient>(
-        fmt::format("{}?{}", url, getSas(kReadOperation)));
+    client = std::make_unique<BlobClient>(fmt::format("{}?{}", url, sas_));
   } else if (authType_ == kAzureOAuthAuthType) {
     auto url = getUrl(true);
-    return std::make_unique<BlobClient>(url, tokenCredential_);
+    client = std::make_unique<BlobClient>(url, tokenCredential_);
   } else {
-    return std::make_unique<BlobClient>(BlobClient::CreateFromConnectionString(
-        connectionString_, fileSystem_, filePath_));
+    client =
+        std::make_unique<BlobClient>(BlobClient::CreateFromConnectionString(
+            connectionString_, fileSystem_, filePath_));
   }
+  return std::make_unique<AzureBlobFileClientWrapper>(std::move(client));
 }
 
 std::unique_ptr<AzureDataLakeFileClient> AbfsConfig::getWriteFileClient() {
   if (testWriteClientFn_) {
     return testWriteClientFn_();
   }
+  if (sasKeyGenerator_ != nullptr) {
+    return std::make_unique<DynamicSasKeyDataLakeFileClient>(
+        getUrl(false), fileSystem_, filePath_, sasKeyGenerator_);
+  }
   std::unique_ptr<DataLakeFileClient> client;
   if (authType_ == kAzureSASAuthType) {
     auto url = getUrl(false);
-    static const std::string kWriteOperation = "write";
-    client = std::make_unique<DataLakeFileClient>(
-        fmt::format("{}?{}", url, getSas(kWriteOperation)));
+    client =
+        std::make_unique<DataLakeFileClient>(fmt::format("{}?{}", url, sas_));
   } else if (authType_ == kAzureOAuthAuthType) {
     auto url = getUrl(false);
     client = std::make_unique<DataLakeFileClient>(url, tokenCredential_);
@@ -241,13 +444,6 @@ std::string AbfsConfig::getUrl(bool withblobSuffix) {
       accountNameWithSuffixForUrl,
       fileSystem_,
       filePath_);
-}
-
-std::string AbfsConfig::getSas(const std::string& operation) {
-  if (sasKeyGenerator_ != nullptr) {
-    return sasKeyGenerator_(fileSystem_, filePath_, operation);
-  }
-  return sas_;
 }
 
 } // namespace facebook::velox::filesystems
