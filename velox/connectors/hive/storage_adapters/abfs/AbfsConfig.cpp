@@ -140,7 +140,9 @@ class DynamicSasKeyDataLakeFileClient final : public AzureDataLakeFileClient {
         filePath_(filePath),
         sasKeyGenerator_(sasKeyGenerator) {}
 
-  void create() override {}
+  void create() override {
+    getWriteClient()->Create();
+  }
 
   Azure::Storage::Files::DataLake::Models::PathProperties getProperties()
       override {
