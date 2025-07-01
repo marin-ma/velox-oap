@@ -74,6 +74,9 @@ static constexpr const char* kAzureOAuthAuthType = "OAuth";
 
 static constexpr const char* kAzureSASAuthType = "SAS";
 
+static constexpr const char* kAzureSasTokenRenewPeriod =
+    "fs.azure.sas.token.renew.period.for.streams";
+
 class AbfsConfig {
  public:
   explicit AbfsConfig(std::string_view path, const config::ConfigBase& config);
@@ -133,6 +136,7 @@ class AbfsConfig {
 
   std::string sas_;
   AbfsSasKeyGenerator sasKeyGenerator_;
+  int64_t sasTokenRenewPeriod_;
 
   std::string tenentId_;
   std::string authorityHost_;

@@ -27,6 +27,8 @@
 namespace facebook::velox::filesystems {
 namespace {
 
+constexpr int64_t kDefaultSasTokenRenewPeriod = 120; // in seconds
+
 folly::Synchronized<std::unordered_map<std::string, AbfsSasKeyGenerator>>&
 sasKeyGenerators() {
   static folly::Synchronized<
@@ -134,11 +136,13 @@ class DynamicSasKeyDataLakeFileClient final : public AzureDataLakeFileClient {
       const std::string& fileUrl,
       const std::string& fileSystem,
       const std::string& filePath,
-      const AbfsSasKeyGenerator& sasKeyGenerator)
+      const AbfsSasKeyGenerator& sasKeyGenerator,
+      int64_t sasTokenRenewPeriod)
       : fileUrl_(fileUrl),
         fileSystem_(fileSystem),
         filePath_(filePath),
-        sasKeyGenerator_(sasKeyGenerator) {}
+        sasKeyGenerator_(sasKeyGenerator),
+        sasTokenRenewPeriod_(sasTokenRenewPeriod) {}
 
   void create() override {
     getWriteClient()->Create();
@@ -170,7 +174,7 @@ class DynamicSasKeyDataLakeFileClient final : public AzureDataLakeFileClient {
   std::string fileSystem_;
   std::string filePath_;
   AbfsSasKeyGenerator sasKeyGenerator_;
-  int64_t minExpirationInSeconds_ = 30;
+  int64_t sasTokenRenewPeriod_;
 
   std::unique_ptr<DataLakeFileClient> writeClient_;
   Azure::DateTime writeSasExpiration_;
@@ -179,7 +183,7 @@ class DynamicSasKeyDataLakeFileClient final : public AzureDataLakeFileClient {
   Azure::DateTime readSasExpiration_;
 
   DataLakeFileClient* getWriteClient() {
-    if (isNearExpiry(writeSasExpiration_, minExpirationInSeconds_)) {
+    if (isNearExpiry(writeSasExpiration_, sasTokenRenewPeriod_)) {
       const auto sas = sasKeyGenerator_(fileSystem_, filePath_, "write");
       writeSasExpiration_ = getExpiry(sas);
       writeClient_ = std::make_unique<DataLakeFileClient>(
@@ -189,7 +193,7 @@ class DynamicSasKeyDataLakeFileClient final : public AzureDataLakeFileClient {
   }
 
   DataLakeFileClient* getReadClient() {
-    if (isNearExpiry(readSasExpiration_, minExpirationInSeconds_)) {
+    if (isNearExpiry(readSasExpiration_, sasTokenRenewPeriod_)) {
       const auto sas =
           sasKeyGenerator_(fileSystem_, filePath_, "get-properties");
       readSasExpiration_ = getExpiry(sas);
@@ -232,12 +236,14 @@ class DynamicSasKeyBlobClient : public Azure::Storage::Blobs::BlobClient,
       const std::string& blobUrl,
       const std::string& fileSystem,
       const std::string& filePath,
-      const AbfsSasKeyGenerator& sasKeyGenerator)
+      const AbfsSasKeyGenerator& sasKeyGenerator,
+      int64_t sasTokenRenewPeriod)
       : BlobClient(blobUrl),
         blobUrl_(blobUrl),
         fileSystem_(fileSystem),
         filePath_(filePath),
-        sasKeyGenerator_(sasKeyGenerator) {}
+        sasKeyGenerator_(sasKeyGenerator),
+        sasTokenRenewPeriod_(sasTokenRenewPeriod) {}
 
   Azure::Response<Azure::Storage::Blobs::Models::BlobProperties> GetProperties()
       override {
@@ -260,11 +266,12 @@ class DynamicSasKeyBlobClient : public Azure::Storage::Blobs::BlobClient,
   std::string fileSystem_;
   std::string filePath_;
   AbfsSasKeyGenerator sasKeyGenerator_;
+  int64_t sasTokenRenewPeriod_;
 
   Azure::DateTime sasExpiration_ = Azure::DateTime::clock::time_point::min();
 
   void updateBlobUrl() {
-    if (isNearExpiry(sasExpiration_, 30)) {
+    if (isNearExpiry(sasExpiration_, sasTokenRenewPeriod_)) {
       auto sas = sasKeyGenerator_(fileSystem_, filePath_, "get-properties");
       sasExpiration_ = getExpiry(sas);
       m_blobUrl = Azure::Core::Url(fmt::format("{}?{}", blobUrl_, sas));
@@ -380,6 +387,8 @@ AbfsConfig::AbfsConfig(
           config.valueExists(sasKey), "Config {} not found", sasKey);
       sas_ = config.get<std::string>(sasKey).value();
     }
+    sasTokenRenewPeriod_ = config.get<int64_t>(
+        kAzureSasTokenRenewPeriod, kDefaultSasTokenRenewPeriod);
   } else {
     VELOX_USER_FAIL(
         "Unsupported auth type {}, supported auth types are SharedKey, OAuth and SAS.",
@@ -390,7 +399,11 @@ AbfsConfig::AbfsConfig(
 std::unique_ptr<AzureBlobClient> AbfsConfig::getReadFileClient() {
   if (sasKeyGenerator_ != nullptr) {
     return std::make_unique<DynamicSasKeyBlobClient>(
-        getUrl(true), fileSystem_, filePath_, sasKeyGenerator_);
+        getUrl(true),
+        fileSystem_,
+        filePath_,
+        sasKeyGenerator_,
+        sasTokenRenewPeriod_);
   }
   std::unique_ptr<BlobClient> client;
   if (authType_ == kAzureSASAuthType) {
@@ -413,7 +426,11 @@ std::unique_ptr<AzureDataLakeFileClient> AbfsConfig::getWriteFileClient() {
   }
   if (sasKeyGenerator_ != nullptr) {
     return std::make_unique<DynamicSasKeyDataLakeFileClient>(
-        getUrl(false), fileSystem_, filePath_, sasKeyGenerator_);
+        getUrl(false),
+        fileSystem_,
+        filePath_,
+        sasKeyGenerator_,
+        sasTokenRenewPeriod_);
   }
   std::unique_ptr<DataLakeFileClient> client;
   if (authType_ == kAzureSASAuthType) {
