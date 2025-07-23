@@ -83,17 +83,20 @@ class AbfsConfig {
  public:
   explicit AbfsConfig(std::string_view path, const config::ConfigBase& config);
 
-  std::unique_ptr<AzureBlobClient> getReadFileClient();
+  std::unique_ptr<AzureBlobClient> getReadFileClient() const;
 
-  std::unique_ptr<AzureDataLakeFileClient> getWriteFileClient();
+  std::unique_ptr<AzureDataLakeFileClient> getWriteFileClient() const;
 
   std::string filePath() const {
     return filePath_;
   }
 
-  /// Test only.
   std::string fileSystem() const {
     return fileSystem_;
+  }
+
+  std::string accountName() const {
+    return accountName_;
   }
 
   /// Test only.
@@ -122,9 +125,9 @@ class AbfsConfig {
     testWriteClientFn_ = nullptr;
   }
 
- private:
-  std::string getUrl(bool withblobSuffix);
+  std::string getUrl(bool withblobSuffix) const;
 
+ private:
   std::string authType_;
 
   // Container name is called FileSystem in some Azure API.
