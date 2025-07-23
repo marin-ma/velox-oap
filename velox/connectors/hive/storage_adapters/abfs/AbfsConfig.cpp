@@ -148,7 +148,7 @@ AbfsConfig::AbfsConfig(
   }
 }
 
-std::unique_ptr<BlobClient> AbfsConfig::getReadFileClient() {
+std::unique_ptr<AzureBlobClient> AbfsConfig::getReadFileClient() const {
   if (authType_ == kAzureSASAuthType) {
     auto url = getUrl(true);
     return std::make_unique<BlobClient>(fmt::format("{}?{}", url, sas_));
@@ -161,7 +161,7 @@ std::unique_ptr<BlobClient> AbfsConfig::getReadFileClient() {
   }
 }
 
-std::unique_ptr<AzureDataLakeFileClient> AbfsConfig::getWriteFileClient() {
+std::unique_ptr<AzureDataLakeFileClient> AbfsConfig::getWriteFileClient() const {
   if (testWriteClientFn_) {
     return testWriteClientFn_();
   }
@@ -181,7 +181,7 @@ std::unique_ptr<AzureDataLakeFileClient> AbfsConfig::getWriteFileClient() {
   return std::make_unique<DataLakeFileClientWrapper>(std::move(client));
 }
 
-std::string AbfsConfig::getUrl(bool withblobSuffix) {
+std::string AbfsConfig::getUrl(bool withblobSuffix) const {
   std::string accountNameWithSuffixForUrl(accountNameWithSuffix_);
   if (withblobSuffix) {
     // We should use correct suffix for blob client.
