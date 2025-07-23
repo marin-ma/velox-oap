@@ -61,6 +61,31 @@ class DataLakeFileClientWrapper final : public AzureDataLakeFileClient {
   const std::unique_ptr<DataLakeFileClient> client_;
 };
 
+class AzureBlobFileClientWrapper : public AzureBlobClient {
+ public:
+  AzureBlobFileClientWrapper(
+      std::unique_ptr<Azure::Storage::Blobs::BlobClient> client) {
+    blobClient_ = std::move(client);
+  }
+
+  Azure::Response<Azure::Storage::Blobs::Models::BlobProperties> GetProperties()
+      override {
+    return blobClient_->GetProperties();
+  }
+
+  Azure::Response<Azure::Storage::Blobs::Models::DownloadBlobResult> Download(
+      const Azure::Storage::Blobs::DownloadBlobOptions& options) override {
+    return blobClient_->Download(options);
+  }
+
+  std::string GetUrl() override {
+    return blobClient_->GetUrl();
+  }
+
+ private:
+  std::unique_ptr<Azure::Storage::Blobs::BlobClient> blobClient_;
+};
+
 AbfsConfig::AbfsConfig(
     std::string_view path,
     const config::ConfigBase& config) {
@@ -149,16 +174,19 @@ AbfsConfig::AbfsConfig(
 }
 
 std::unique_ptr<AzureBlobClient> AbfsConfig::getReadFileClient() const {
+  std::unique_ptr<BlobClient> client;
   if (authType_ == kAzureSASAuthType) {
     auto url = getUrl(true);
-    return std::make_unique<BlobClient>(fmt::format("{}?{}", url, sas_));
+    client = std::make_unique<BlobClient>(fmt::format("{}?{}", url, sas_));
   } else if (authType_ == kAzureOAuthAuthType) {
     auto url = getUrl(true);
-    return std::make_unique<BlobClient>(url, tokenCredential_);
+    client = std::make_unique<BlobClient>(url, tokenCredential_);
   } else {
-    return std::make_unique<BlobClient>(BlobClient::CreateFromConnectionString(
-        connectionString_, fileSystem_, filePath_));
+    client =
+        std::make_unique<BlobClient>(BlobClient::CreateFromConnectionString(
+            connectionString_, fileSystem_, filePath_));
   }
+  return std::make_unique<AzureBlobFileClientWrapper>(std::move(client));
 }
 
 std::unique_ptr<AzureDataLakeFileClient> AbfsConfig::getWriteFileClient() const {
