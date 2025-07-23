@@ -14,23 +14,17 @@
  * limitations under the License.
  */
 
-#pragma once
+#include "velox/connectors/hive/storage_adapters/abfs/AbfsUtil.h"
 
-#include <azure/storage/blobs/blob_client.hpp>
+#include "gtest/gtest.h"
 
-namespace facebook::velox::filesystems {
+using namespace facebook::velox::filesystems;
 
-class AzureBlobClient {
- public:
-  virtual ~AzureBlobClient() {}
-
-  virtual Azure::Response<Azure::Storage::Blobs::Models::BlobProperties>
-  getProperties() = 0;
-
-  virtual Azure::Response<Azure::Storage::Blobs::Models::DownloadBlobResult>
-  download(const Azure::Storage::Blobs::DownloadBlobOptions& options) = 0;
-
-  virtual std::string getUrl() = 0;
-};
-
-} // namespace facebook::velox::filesystems
+TEST(AbfsUtilsTest, isAbfsFile) {
+  EXPECT_FALSE(isAbfsFile("abfs:"));
+  EXPECT_FALSE(isAbfsFile("abfss:"));
+  EXPECT_FALSE(isAbfsFile("abfs:/"));
+  EXPECT_FALSE(isAbfsFile("abfss:/"));
+  EXPECT_TRUE(isAbfsFile("abfs://test@test.dfs.core.windows.net/test"));
+  EXPECT_TRUE(isAbfsFile("abfss://test@test.dfs.core.windows.net/test"));
+}
