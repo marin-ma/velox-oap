@@ -80,6 +80,8 @@ AbfsConfig::AbfsConfig(
   auto firstSep = file.find_first_of("/");
   filePath_ = file.substr(firstSep + 1);
   accountNameWithSuffix_ = file.substr(firstAt + 1, firstSep - firstAt - 1);
+  auto firstDot = accountNameWithSuffix_.find_first_of(".");
+  accountName_ = accountNameWithSuffix_.substr(0, firstDot);
 
   auto authTypeKey =
       fmt::format("{}.{}", kAzureAccountAuthType, accountNameWithSuffix_);
@@ -92,12 +94,10 @@ AbfsConfig::AbfsConfig(
         fmt::format("{}.{}", kAzureAccountKey, accountNameWithSuffix_);
     VELOX_USER_CHECK(
         config.valueExists(credKey), "Config {} not found", credKey);
-    auto firstDot = accountNameWithSuffix_.find_first_of(".");
-    auto accountName = accountNameWithSuffix_.substr(0, firstDot);
     auto endpointSuffix = accountNameWithSuffix_.substr(firstDot + 5);
     std::stringstream ss;
     ss << "DefaultEndpointsProtocol=" << (isHttps_ ? "https" : "http");
-    ss << ";AccountName=" << accountName;
+    ss << ";AccountName=" << accountName_;
     ss << ";AccountKey=" << config.get<std::string>(credKey).value();
     ss << ";EndpointSuffix=" << endpointSuffix;
 
