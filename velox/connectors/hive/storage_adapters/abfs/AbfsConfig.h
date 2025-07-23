@@ -21,6 +21,8 @@
 #include <azure/storage/files/datalake.hpp>
 #include <folly/hash/Hash.h>
 #include <string>
+
+#include "velox/connectors/hive/storage_adapters/abfs/AzureBlobClient.h"
 #include "velox/connectors/hive/storage_adapters/abfs/AzureDataLakeFileClient.h"
 
 using namespace Azure::Storage::Blobs;

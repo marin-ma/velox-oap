@@ -53,7 +53,7 @@ class DataLakeFileClientWrapper final : public AzureDataLakeFileClient {
     // do nothing.
   }
 
-  std::string getUrl() const override {
+  std::string getUrl() override {
     return client_->GetUrl();
   }
 
