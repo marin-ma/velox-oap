@@ -121,6 +121,7 @@ class AbfsConfig {
 
   bool isHttps_;
   std::string accountNameWithSuffix_;
+  std::string accountName_;
 
   std::string sas_;
 
