@@ -36,7 +36,34 @@ using namespace connector::hive;
 namespace gcs = ::google::cloud::storage;
 namespace gc = ::google::cloud;
 
+namespace {
+
 auto constexpr kGcsInvalidPath = "File {} is not a valid gcs file";
+
+folly::Synchronized<
+    std::unordered_map<std::string, GcsOAuthCredentialsProviderFactory>>&
+credentialsProviderFactories() {
+  static folly::Synchronized<
+      std::unordered_map<std::string, GcsOAuthCredentialsProviderFactory>>
+      factories;
+  return factories;
+}
+
+std::shared_ptr<GcsOAuthCredentialsProvider> getCredentialsProviderByName(
+    const std::string& providerName,
+    const std::shared_ptr<connector::hive::HiveConfig>& hiveConfig) {
+  return credentialsProviderFactories().withRLock([&](const auto& factories) {
+    const auto it = factories.find(providerName);
+    VELOX_CHECK(
+        it != factories.end(),
+        "GcsOAuthCredentialsProviderFactory for '{}' not registered",
+        providerName);
+    const auto& factory = it->second;
+    return factory(hiveConfig);
+  });
+}
+
+} // namespace
 
 class GcsFileSystem::Impl {
  public:
@@ -50,21 +77,28 @@ class GcsFileSystem::Impl {
   void initializeClient() {
     constexpr std::string_view kHttpsScheme{"https://"};
     auto options = gc::Options{};
-    auto endpointOverride = hiveConfig_->gcsEndpoint();
-    // Use secure credentials by default.
-    if (!endpointOverride.empty()) {
-      options.set<gcs::RestEndpointOption>(endpointOverride);
-      // Use Google default credentials if endpoint has https scheme.
-      if (endpointOverride.find(kHttpsScheme) == 0) {
-        options.set<gc::UnifiedCredentialsOption>(
-            gc::MakeGoogleDefaultCredentials());
+    auto tokenProvider = hiveConfig_->gcsAuthAccessTokenProvider();
+    if (auto credentialsProvider =
+            getCredentialsProviderByName(tokenProvider.value(), hiveConfig_)) {
+      auto credentials = credentialsProvider->getCredentials();
+      options.set<gcs::Oauth2CredentialsOption>(credentials);
+    } else {
+      auto endpointOverride = hiveConfig_->gcsEndpoint();
+      // Use secure credentials by default.
+      if (!endpointOverride.empty()) {
+        options.set<gcs::RestEndpointOption>(endpointOverride);
+        // Use Google default credentials if endpoint has https scheme.
+        if (endpointOverride.find(kHttpsScheme) == 0) {
+          options.set<gc::UnifiedCredentialsOption>(
+              gc::MakeGoogleDefaultCredentials());
+        } else {
+          options.set<gc::UnifiedCredentialsOption>(
+              gc::MakeInsecureCredentials());
+        }
       } else {
         options.set<gc::UnifiedCredentialsOption>(
-            gc::MakeInsecureCredentials());
+            gc::MakeGoogleDefaultCredentials());
       }
-    } else {
-      options.set<gc::UnifiedCredentialsOption>(
-          gc::MakeGoogleDefaultCredentials());
     }
     options.set<gcs::UploadBufferSizeOption>(kUploadBufferSize);
 
@@ -323,6 +357,21 @@ void GcsFileSystem::rmdir(std::string_view path) {
         bucket,
         metadata->name());
   }
+}
+
+void registerOAuthCredentialsProviderFactory(
+    const std::string& providerName,
+    const GcsOAuthCredentialsProviderFactory& factory) {
+  VELOX_CHECK(
+      !providerName.empty(),
+      "GcsOAuthCredentialsProviderFactory name cannot be empty");
+  credentialsProviderFactories().withWLock([&](auto& factories) {
+    VELOX_CHECK(
+        factories.find(providerName) == factories.end(),
+        "GcsOAuthCredentialsProviderFactory '{}' already registered",
+        providerName);
+    factories.insert({providerName, factory});
+  });
 }
 
 } // namespace filesystems

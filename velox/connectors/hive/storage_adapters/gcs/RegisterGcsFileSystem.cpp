@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "velox/connectors/hive/storage_adapters/gcs/RegisterGcsFileSystem.h"
+
 #ifdef VELOX_ENABLE_GCS
 #include "velox/common/config/Config.h"
 #include "velox/connectors/hive/HiveConfig.h"
@@ -112,6 +114,12 @@ void registerGcsFileSystem() {
   dwio::common::FileSink::registerFactory(
       std::function(gcsWriteFileSinkGenerator));
 #endif
+}
+
+void registerGcsOAuthCredentialsProviderFactory(
+    const std::string& providerName,
+    const GcsOAuthCredentialsProviderFactory& factory) {
+  registerOAuthCredentialsProviderFactory(providerName, factory);
 }
 
 } // namespace facebook::velox::filesystems

@@ -17,6 +17,8 @@
 #pragma once
 
 #include "velox/common/file/FileSystems.h"
+#include "velox/connectors/hive/HiveConfig.h"
+#include "velox/connectors/hive/storage_adapters/gcs/GcsOAuthCredentialsProvider.h"
 
 namespace facebook::velox::filesystems {
 
@@ -103,5 +105,13 @@ class GcsFileSystem : public FileSystem {
   class Impl;
   std::shared_ptr<Impl> impl_;
 };
+
+using GcsOAuthCredentialsProviderFactory =
+    std::function<std::shared_ptr<GcsOAuthCredentialsProvider>(
+        const std::shared_ptr<connector::hive::HiveConfig>& hiveConfig)>;
+
+void registerOAuthCredentialsProviderFactory(
+    const std::string& providerName,
+    const GcsOAuthCredentialsProviderFactory& factory);
 
 } // namespace facebook::velox::filesystems
