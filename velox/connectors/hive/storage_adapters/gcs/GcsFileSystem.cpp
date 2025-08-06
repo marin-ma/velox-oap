@@ -80,8 +80,8 @@ class GcsFileSystem::Impl {
     if (auto tokenProvider = hiveConfig_->gcsAuthAccessTokenProvider()) {
       auto credentialsProvider =
           getCredentialsProviderByName(tokenProvider.value(), hiveConfig_);
-      credentials_ = credentialsProvider->getCredentials();
-      options.set<gcs::Oauth2CredentialsOption>(credentials_);
+      auto credentials = credentialsProvider->getCredentials();
+      options.set<gcs::Oauth2CredentialsOption>(credentials);
     } else {
       auto endpointOverride = hiveConfig_->gcsEndpoint();
       // Use secure credentials by default.
@@ -140,14 +140,9 @@ class GcsFileSystem::Impl {
     return client_;
   }
 
-  std::shared_ptr<gcs::oauth2::Credentials> getCredentials() const {
-    return credentials_;
-  }
-
  private:
   const std::shared_ptr<HiveConfig> hiveConfig_;
   std::shared_ptr<gcs::Client> client_;
-  std::shared_ptr<gcs::oauth2::Credentials> credentials_;
 };
 
 GcsFileSystem::GcsFileSystem(std::shared_ptr<const config::ConfigBase> config)
