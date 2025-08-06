@@ -77,9 +77,9 @@ class GcsFileSystem::Impl {
   void initializeClient() {
     constexpr std::string_view kHttpsScheme{"https://"};
     auto options = gc::Options{};
-    auto tokenProvider = hiveConfig_->gcsAuthAccessTokenProvider();
-    if (auto credentialsProvider =
-            getCredentialsProviderByName(tokenProvider.value(), hiveConfig_)) {
+    if (auto tokenProvider = hiveConfig_->gcsAuthAccessTokenProvider()) {
+      auto credentialsProvider =
+          getCredentialsProviderByName(tokenProvider.value(), hiveConfig_);
       auto credentials = credentialsProvider->getCredentials();
       options.set<gcs::Oauth2CredentialsOption>(credentials);
     } else {
