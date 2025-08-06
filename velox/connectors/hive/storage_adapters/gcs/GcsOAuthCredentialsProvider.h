@@ -26,7 +26,8 @@ class GcsOAuthCredentialsProvider {
  public:
   virtual ~GcsOAuthCredentialsProvider() = default;
 
-  virtual std::shared_ptr<gcs::oauth2::Credentials> getCredentials() = 0;
+  virtual std::shared_ptr<gcs::oauth2::Credentials> getCredentials(
+      const std::string& bucket) = 0;
 };
 
 } // namespace facebook::velox::filesystems

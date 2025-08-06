@@ -77,9 +77,10 @@ gcsFileSystemGenerator() {
 
               std::shared_ptr<GcsFileSystem> fs;
               if (properties != nullptr) {
-                fs = std::make_shared<GcsFileSystem>(properties);
+                fs = std::make_shared<GcsFileSystem>(bucket, properties);
               } else {
                 fs = std::make_shared<GcsFileSystem>(
+                    bucket,
                     std::make_shared<config::ConfigBase>(
                         std::unordered_map<std::string, std::string>()));
               }

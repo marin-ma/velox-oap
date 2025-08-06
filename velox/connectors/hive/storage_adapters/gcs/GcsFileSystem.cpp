@@ -67,8 +67,9 @@ std::shared_ptr<GcsOAuthCredentialsProvider> getCredentialsProviderByName(
 
 class GcsFileSystem::Impl {
  public:
-  Impl(const config::ConfigBase* config)
-      : hiveConfig_(std::make_shared<HiveConfig>(
+  Impl(const std::string& bucket, const config::ConfigBase* config)
+      : bucket_(bucket),
+        hiveConfig_(std::make_shared<HiveConfig>(
             std::make_shared<config::ConfigBase>(config->rawConfigsCopy()))) {}
 
   ~Impl() = default;
@@ -80,7 +81,7 @@ class GcsFileSystem::Impl {
     if (auto tokenProvider = hiveConfig_->gcsAuthAccessTokenProvider()) {
       auto credentialsProvider =
           getCredentialsProviderByName(tokenProvider.value(), hiveConfig_);
-      auto credentials = credentialsProvider->getCredentials();
+      auto credentials = credentialsProvider->getCredentials(bucket_);
       options.set<gcs::Oauth2CredentialsOption>(credentials);
     } else {
       auto endpointOverride = hiveConfig_->gcsEndpoint();
@@ -141,13 +142,16 @@ class GcsFileSystem::Impl {
   }
 
  private:
+  const std::string bucket_;
   const std::shared_ptr<HiveConfig> hiveConfig_;
   std::shared_ptr<gcs::Client> client_;
 };
 
-GcsFileSystem::GcsFileSystem(std::shared_ptr<const config::ConfigBase> config)
+GcsFileSystem::GcsFileSystem(
+    const std::string& bucket,
+    std::shared_ptr<const config::ConfigBase> config)
     : FileSystem(config) {
-  impl_ = std::make_shared<Impl>(config.get());
+  impl_ = std::make_shared<Impl>(bucket, config.get());
 }
 
 void GcsFileSystem::initializeClient() {
