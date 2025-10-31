@@ -62,6 +62,9 @@ class HiveDataSource : public DataSource {
 
   std::unordered_map<std::string, RuntimeMetric> getRuntimeStats() override;
 
+  std::unordered_map<std::string, std::vector<TimeDetails>> getTimeDetails()
+      override;
+
   bool allPrefetchIssued() const override {
     return splitReader_ && splitReader_->allPrefetchIssued();
   }

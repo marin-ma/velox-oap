@@ -61,6 +61,12 @@ struct RuntimeMetric {
   std::string toString() const;
 };
 
+struct TimeDetails {
+  std::chrono::steady_clock::time_point startTime{};
+
+  uint64_t durationUs{0};
+};
+
 /// Simple interface to implement writing of runtime stats to Velox Operator
 /// stats.
 /// Inherit a concrete class from this to implement your writing.

@@ -275,6 +275,11 @@ class DataSource {
     return {};
   }
 
+  virtual std::unordered_map<std::string, std::vector<TimeDetails>>
+  getTimeDetails() {
+    return {};
+  }
+
   /// Returns true if 'this' has initiated all the prefetch this will initiate.
   /// This means that the caller should schedule next splits to prefetch in the
   /// background. false if the source does not prefetch.

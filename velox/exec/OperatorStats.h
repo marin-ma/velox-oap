@@ -189,6 +189,8 @@ struct OperatorStats {
   // Operator::stats(bool) API.
   std::unordered_map<std::string, ExprStats> expressionStats;
 
+  std::unordered_map<std::string, std::vector<TimeDetails>> timeDetails;
+
   int numDrivers = 0;
 
   OperatorStats() = default;

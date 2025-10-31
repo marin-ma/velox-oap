@@ -146,6 +146,8 @@ struct PlanNodeStats {
   /// A map of expression name to its respective stats.
   std::unordered_map<std::string, ExprStats> expressionStats;
 
+  std::unordered_map<std::string, std::vector<TimeDetails>> timeDetails;
+
   /// Add stats for a single operator instance.
   void add(const OperatorStats& stats);
 

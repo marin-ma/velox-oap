@@ -305,6 +305,7 @@ bool TableScan::getSplit() {
     noMoreSplits_ = true;
     if (dataSource_) {
       const auto connectorStats = dataSource_->getRuntimeStats();
+      const auto timeDetails = dataSource_->getTimeDetails();
       auto lockedStats = stats_.wlock();
       for (const auto& [name, metric] : connectorStats) {
         if (FOLLY_UNLIKELY(lockedStats->runtimeStats.count(name) == 0)) {
@@ -313,6 +314,13 @@ bool TableScan::getSplit() {
           VELOX_CHECK_EQ(lockedStats->runtimeStats.at(name).unit, metric.unit);
         }
         lockedStats->runtimeStats.at(name).merge(metric);
+      }
+      for (const auto& [name, details] : timeDetails) {
+        if (FOLLY_UNLIKELY(lockedStats->timeDetails.count(name) == 0)) {
+          lockedStats->timeDetails.emplace(name, std::vector<TimeDetails>{});
+        }
+        auto& item = lockedStats->timeDetails.at(name);
+        item.insert(item.end(), details.begin(), details.end());
       }
     }
     return false;

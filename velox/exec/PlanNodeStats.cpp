@@ -147,6 +147,15 @@ void PlanNodeStats::addTotals(const OperatorStats& stats) {
     }
   }
 
+  for (const auto& [name, details] : stats.timeDetails) {
+    if (UNLIKELY(this->timeDetails.count(name) == 0)) {
+      this->timeDetails.insert(std::make_pair(name, details));
+    } else {
+      auto& item = this->timeDetails.at(name);
+      item.insert(item.end(), details.begin(), details.end());
+    }
+  }
+
   // Populating number of drivers for plan nodes with multiple operators is not
   // useful. Each operator could have been executed in different pipelines with
   // different number of drivers.

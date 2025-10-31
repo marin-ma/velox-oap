@@ -39,8 +39,9 @@ class MicrosecondTimer {
     (*timer_) += duration.count();
   }
 
- private:
   std::chrono::steady_clock::time_point start_;
+
+ private:
   uint64_t* timer_;
 };
 

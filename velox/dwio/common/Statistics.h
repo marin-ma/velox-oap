@@ -541,6 +541,8 @@ struct ColumnReaderStatistics {
 
   // Total time spent in loading pages, in nanoseconds.
   uint64_t pageLoadTimeNs{0};
+
+  std::vector<TimeDetails> pageLoadTimeDetails;
 };
 
 struct RuntimeStatistics {
@@ -605,6 +607,15 @@ struct RuntimeStatistics {
       result.emplace(
           "pageLoadTimeNs",
           RuntimeMetric(columnReaderStatistics.pageLoadTimeNs));
+    }
+    return result;
+  }
+
+  std::unordered_map<std::string, std::vector<TimeDetails>> toTimeDetailsMap() {
+    std::unordered_map<std::string, std::vector<TimeDetails>> result;
+    if (columnReaderStatistics.pageLoadTimeNs > 100) {
+      result.emplace(
+          "pageLoadTimeDetails", columnReaderStatistics.pageLoadTimeDetails);
     }
     return result;
   }

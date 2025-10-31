@@ -605,6 +605,15 @@ void OperatorStats::add(const OperatorStats& other) {
     }
   }
 
+  for (const auto& [name, details] : other.timeDetails) {
+    if (UNLIKELY(timeDetails.count(name) == 0)) {
+      timeDetails.insert(std::make_pair(name, details));
+    } else {
+      auto& item = timeDetails.at(name);
+      item.insert(item.end(), details.begin(), details.end());
+    }
+  }
+
   numDrivers += other.numDrivers;
   spilledInputBytes += other.spilledInputBytes;
   spilledBytes += other.spilledBytes;

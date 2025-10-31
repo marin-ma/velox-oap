@@ -1350,6 +1350,10 @@ class ParquetRowReader::Impl {
     stats.processedStrides += rowGroupIds_.size();
     stats.columnReaderStatistics.pageLoadTimeNs +=
         columnReaderStats_.pageLoadTimeNs;
+    stats.columnReaderStatistics.pageLoadTimeDetails.insert(
+        stats.columnReaderStatistics.pageLoadTimeDetails.end(),
+        columnReaderStats_.pageLoadTimeDetails.begin(),
+        columnReaderStats_.pageLoadTimeDetails.end());
   }
 
   void resetFilterCaches() {

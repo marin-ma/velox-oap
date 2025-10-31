@@ -477,6 +477,11 @@ HiveDataSource::getRuntimeStats() {
   return res;
 }
 
+std::unordered_map<std::string, std::vector<TimeDetails>>
+HiveDataSource::getTimeDetails() {
+  return runtimeStats_.toTimeDetailsMap();
+}
+
 void HiveDataSource::setFromDataSource(
     std::unique_ptr<DataSource> sourceUnique) {
   auto source = dynamic_cast<HiveDataSource*>(sourceUnique.get());
