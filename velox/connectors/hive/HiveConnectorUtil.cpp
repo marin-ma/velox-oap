@@ -255,6 +255,19 @@ bool isSpecialColumn(
   return specialName.has_value() && name == *specialName;
 }
 
+bool supportsMergeWithOr(const common::FilterPtr& filter) {
+  switch (filter->kind()) {
+    case common::FilterKind::kBigintValuesUsingHashTable:
+    case common::FilterKind::kBigintValuesUsingBitmask:
+    case common::FilterKind::kNegatedBigintRange:
+    case common::FilterKind::kNegatedBigintValuesUsingBitmask:
+    case common::FilterKind::kNegatedBigintValuesUsingHashTable:
+      return false;
+    default:
+      return true;
+  }
+}
+
 } // namespace
 
 const std::string& getColumnName(const common::Subfield& subfield) {
@@ -953,12 +966,18 @@ core::TypedExprPtr extractFiltersFromRemainingFilter(
 
       if (disjuncts.empty()) {
         subfield = tmpFilters.begin()->first.clone();
-      } else if (!(subfield == tmpFilters.begin()->first)) {
+      } else if (subfield != tmpFilters.begin()->first) {
         disjuncts.clear();
         break;
       }
 
-      disjuncts.push_back(tmpFilters.begin()->second->clone());
+      auto filter = tmpFilters.begin()->second;
+      if (!supportsMergeWithOr(filter)) {
+        disjuncts.clear();
+        break;
+      }
+
+      disjuncts.push_back(filter->clone());
     }
 
     if (!disjuncts.empty()) {
