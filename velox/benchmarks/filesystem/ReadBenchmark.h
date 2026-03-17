@@ -239,21 +239,22 @@ class ReadBenchmark {
   }
 
   void modes(int32_t size, int32_t gap, int32_t count) {
-    int repeats =
-        std::max<int32_t>(3, (FLAGS_measurement_size) / (size * count));
-    std::cout << fmt::format(
-                     "Run: {} Gap: {} Count: {} Repeats: {}",
-                     size,
-                     gap,
-                     count,
-                     repeats)
-              << std::endl;
-    randomReads(size, gap, count, repeats, Mode::Pread, false);
-    randomReads(size, gap, count, repeats, Mode::Preadv, false);
-    randomReads(size, gap, count, repeats, Mode::Multiple, false);
-    randomReads(size, gap, count, repeats, Mode::Pread, true);
-    randomReads(size, gap, count, repeats, Mode::Preadv, true);
-    randomReads(size, gap, count, repeats, Mode::Multiple, true);
+    std::vector<int32_t> repeatsv = {1, 2, 4, 8, 16, 32, 64, 120};
+    for (auto repeats : repeatsv) {
+      std::cout << fmt::format(
+                       "Run: {} Gap: {} Count: {} Repeats: {}",
+                       size,
+                       gap,
+                       count,
+                       repeats)
+                << std::endl;
+      // randomReads(size, gap, count, repeats, Mode::Pread, false);
+      // randomReads(size, gap, count, repeats, Mode::Preadv, false);
+      // randomReads(size, gap, count, repeats, Mode::Multiple, false);
+      // randomReads(size, gap, count, repeats, Mode::Pread, true);
+      randomReads(size, gap, count, repeats, Mode::Preadv, true);
+      // randomReads(size, gap, count, repeats, Mode::Multiple, true);
+    }
   }
 
   void run();
