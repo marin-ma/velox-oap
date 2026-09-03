@@ -25,3 +25,13 @@ target_link_libraries(
   GTest::gmock
   GTest::gtest_main
 )
+
+if(VELOX_ENABLE_BENCHMARKS)
+  add_executable(velox_dwio_parquet_level_comparison_benchmark LevelComparisonBenchmark.cpp)
+  target_link_libraries(
+    velox_dwio_parquet_level_comparison_benchmark
+    velox_dwio_parquet_common
+    Folly::folly
+    Folly::follybenchmark
+  )
+endif()

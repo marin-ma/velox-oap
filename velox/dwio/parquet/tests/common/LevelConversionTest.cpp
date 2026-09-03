@@ -24,6 +24,7 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -118,6 +119,48 @@ TEST(GreaterThanBitmap, generatesExpectedBitmasks) {
   EXPECT_EQ(
       GreaterThanBitmap(levels.data(), /*num_levels=*/64, /*rhs*/ 6),
       0x8080808080808080);
+}
+
+// Covers what a vectorized implementation can get wrong: every length from
+// 0 to 64 (SIMD batches plus a scalar tail), unaligned input, and signed
+// comparison at the int16 extremes.
+TEST(GreaterThanBitmap, allLengthsUnalignedAndSigned) {
+  auto reference = [](const int16_t* levels, int64_t numLevels, int16_t rhs) {
+    uint64_t mask{0};
+    for (int64_t i = 0; i < numLevels; ++i) {
+      mask |= static_cast<uint64_t>(levels[i] > rhs) << i;
+    }
+    return mask;
+  };
+  std::vector<int16_t> levels(64 + 16);
+  const int16_t values[] = {
+      std::numeric_limits<int16_t>::min(),
+      -1,
+      0,
+      1,
+      2,
+      3,
+      std::numeric_limits<int16_t>::max(),
+  };
+  for (size_t i = 0; i < levels.size(); ++i) {
+    levels[i] = values[(i * 5) % 7];
+  }
+  for (int offset = 0; offset < 16; ++offset) {
+    for (int64_t numLevels = 0; numLevels <= 64; ++numLevels) {
+      for (int16_t rhs :
+           {std::numeric_limits<int16_t>::min(),
+            static_cast<int16_t>(-1),
+            static_cast<int16_t>(0),
+            static_cast<int16_t>(2),
+            std::numeric_limits<int16_t>::max()}) {
+        ASSERT_EQ(
+            GreaterThanBitmap(levels.data() + offset, numLevels, rhs),
+            reference(levels.data() + offset, numLevels, rhs))
+            << "offset=" << offset << " numLevels=" << numLevels
+            << " rhs=" << rhs;
+      }
+    }
+  }
 }
 #endif
 
